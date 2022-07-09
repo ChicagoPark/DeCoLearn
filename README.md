@@ -80,3 +80,96 @@ It is worth mentioning that the brain mri data used in this repo is provided by 
 ## Supplementary Materials
 
 In this repo, we provide [a supplementary document](./file/supplemental_documents.pdf) showing (a) an illustration of simulated sampling masks, (b) validation with additional levels of deformation, (c) validation with additional sub-sampling rates, (d) an illustration of the influence of the trade-off parameter in Equ. (10) of the paper, and (e) validation on MRI measurements simulated using complex-value ground-truth images.
+
+
+====
+
+## Code Responsibility per File
+
+
+### `[decolearn dir] main.py`
+
+----
+```diff
++ Responsibility: 
+
++ Reconstruction module: from torch_util.module import EDSR
+
++ Registeration module: from torch_util.module import cvpr2018_net as voxelmorph
+
++ method_dict: Save DeCoLearn file as a dictionary and process training and testing 
+
++ load_dataset_fn: We use load_synthetic_MoDL_dataset inside of modl.py
+
+- Be careful: 
+```
+----
+
+* Unfamiliar Methods
+----
+```diff
++ config.json: Diverse directory path; (Hyper) parameters; training and testing setting.
+
+- Be careful: 
+```
+----
+
+
+### `[decolearn dir - dataset dir] modl.py`
+
+----
+```diff
++ Responsibility: main.py uses modl.py for core dataset (specifically load_synthetic_MoDL_dataset).
+
+- Be careful: 
+```
+----
+
+* Unfamiliar Methods
+----
+```diff
++ Key: 
+
+- Be careful: 
+```
+----
+
+
+### `[decolearn dir - dataset dir] torch_mri.py`
+
+
+----
+```diff
++ Responsibility: 
+
+- Be careful: 
+```
+----
+
+* Unfamiliar Methods
+----
+```diff
++ Key: 
+
+- Be careful: 
+```
+----
+
+### `[decolearn dir - method dir] DeCoLearn.py`
+
+----
+```diff
++ Responsibility: 
+
+- Be careful: 
+```
+----
+
+* Unfamiliar Methods
+----
+```diff
++ Key: 
+
+- Be careful: 
+```
+----
