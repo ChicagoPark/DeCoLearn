@@ -128,7 +128,28 @@ In this repo, we provide [a supplementary document](./file/supplemental_document
 * Unfamiliar Methods
 ----
 ```diff
-+ Key: 
++ from torch_util.common import check_and_mkdir: 
++ torch.view_as_complex(ipt)                   :
+      
+        >>> x=torch.randn(4, 2)
+        >>> x
+        tensor([[ 1.6116, -0.5772],
+                [-1.4606, -0.9120],
+                [ 0.0786, -1.7497],
+                [-0.6561, -1.6623]])
+        >>> torch.view_as_complex(x)
+        tensor([(1.6116-0.5772j), (-1.4606-0.9120j), (0.0786-1.7497j), (-0.6561-1.6623j)])
+
++ .permute()                                   : Change the order of array dimention
+
+        >>> input_var = torch.randn(3, 5, 2)        # torch.Size([3, 5, 2])
+        >>> input_var = input_var.permute(2, 0, 1)  # torch.Size([2, 3, 5])
+
++ from dataset.torch_mri import generate_mask  :
+addwgn function in dataset.torch_mri           : return noised input and noise.
++ for i_shape in tqdm(range(num_shape)): # tqdm:
++ torch.stack(i, 0)
+
 
 - Be careful: 
 ```
