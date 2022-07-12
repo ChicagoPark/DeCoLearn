@@ -165,6 +165,7 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 ```
 ----
 
+## `dataset` directory
 
 ### `[decolearn dir - dataset dir] torch_mri.py`
 
@@ -186,7 +187,67 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 ```
 ----
 
-### `[decolearn dir - method dir] DeCoLearn.py`
+## `method` directory
+
+### `[method] DeCoLearn.py`
+
+----
+```diff
++ Responsibility: 
+
+- Be careful: 
+```
+----
+
+* Unfamiliar Methods
+----
+```diff
++ Key: 
+
+- Be careful: 
+```
+----
+
+## `torch_util` directory
+
+[Done? False]
+
+### `[t_u] module.py`
+
+----
+```diff
+[Done]
+# Basic 
++ conv_block class: Single convolution block with Leaky Relu function in the Unet (Conv + LeakyReLU)
+
+#### Registration ####
++ unet_core class: contains encoder and decoder.
+
+        Note: the first layer of encoder has 2 feature mapsto process complex value
+
++ cvpr2018_net class: 
+
++ SpatialTransformer class:
+
+[Done]
+#### Reconstruction ####
++ ResBlock class: Usual ResBlock.
+
++ EDSR class: construct 
+using multiple ResBlocks to 
+```
+----
+
+* Unfamiliar Methods
+----
+```diff
++ nn.ModuleList(): easy to manage block
+
++ conv_fn = getattr(nn, "Conv{0}d".format(dim)): get the attributes(variables or functions) of class
+```
+----
+
+### `[t_u] callback.py`
 
 ----
 ```diff
