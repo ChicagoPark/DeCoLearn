@@ -121,6 +121,12 @@ In this repo, we provide [a supplementary document](./file/supplemental_document
 ```diff
 + Responsibility: main.py uses modl.py for core dataset (specifically load_synthetic_MoDL_dataset).
 
++ def generate_affine_grid(imgSize, translation=(0, 0), reflection=(1, 1), scale=1, rotate=0, shear=(0, 0)):
+
++ def generate_nonlinear_grid(imgSize, P, theta, sigma, mask):
+
++ def load_synthetic_MoDL_dataset(...): 
+
 - Be careful: 
 ```
 ----
@@ -128,7 +134,6 @@ In this repo, we provide [a supplementary document](./file/supplemental_document
 * Unfamiliar Methods
 ----
 ```diff
-+ from torch_util.common import check_and_mkdir: 
 + torch.view_as_complex(ipt)                   :
       
         >>> x=torch.randn(4, 2)
@@ -147,9 +152,14 @@ In this repo, we provide [a supplementary document](./file/supplemental_document
 
 + from dataset.torch_mri import generate_mask  :
 addwgn function in dataset.torch_mri           : return noised input and noise.
-+ for i_shape in tqdm(range(num_shape)): # tqdm:
+
++ for i_shape in tqdm(range(num_shape)): # tqdm is progress visualization tool
+
 + torch.stack(i, 0)
 
++ conv_fn = getattr(nn, "Conv{0}d".format(dim)): 
+
++ 
 
 - Be careful: 
 ```
