@@ -221,13 +221,22 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 + conv_block class: Single convolution block with Leaky Relu function in the Unet (Conv + LeakyReLU)
 
 #### Registration ####
+[Done]
 + unet_core class: contains encoder and decoder.
 
         Note: the first layer of encoder has 2 feature mapsto process complex value
 
 + cvpr2018_net class: 
 
-+ SpatialTransformer class:
++ SpatialTransformer class: essentially does linear interpolation
+
+### `[t_u] module.py`
+
+----
+```diff
++ Key: Various matrics operations such as PSNR, SSIM, Mean, Stack, and so on.
+```
+----
 
 [Done]
 #### Reconstruction ####
@@ -251,7 +260,7 @@ using multiple ResBlocks to
 
 ----
 ```diff
-+ Responsibility: 
++ Responsibility: Tensorboard
 
 - Be careful: 
 ```
