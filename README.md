@@ -193,7 +193,7 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 
 ----
 ```diff
-+ Responsibility: 
++ Responsibility: (1) Data dictionalize, (2) Model training and validation
 
 - Be careful: 
 ```
