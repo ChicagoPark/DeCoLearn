@@ -261,8 +261,6 @@ using multiple ResBlocks to
 ----
 ```diff
 + Responsibility: Tensorboard
-
-- Be careful: 
 ```
 ----
 
