@@ -223,8 +223,7 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 #### Reconstruction ####
 + ResBlock class: Usual ResBlock.
 
-+ EDSR class: construct 
-using multiple ResBlocks to 
++ EDSR class: reconstruct using multiple ResBlocks
 
 #### Registration ####
 [Done]
@@ -232,7 +231,7 @@ using multiple ResBlocks to
 
         Note: the first layer of encoder has 2 feature mapsto process complex value
 
-+ cvpr2018_net class: 
++ cvpr2018_net class: Registration model (voxelmorph)
 
 + SpatialTransformer class: essentially does linear interpolation
 ```
