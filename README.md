@@ -220,6 +220,12 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 # Basic 
 + conv_block class: Single convolution block with Leaky Relu function in the Unet (Conv + LeakyReLU)
 
+#### Reconstruction ####
++ ResBlock class: Usual ResBlock.
+
++ EDSR class: construct 
+using multiple ResBlocks to 
+
 #### Registration ####
 [Done]
 + unet_core class: contains encoder and decoder.
@@ -229,23 +235,7 @@ addwgn function in dataset.torch_mri           : return noised input and noise.
 + cvpr2018_net class: 
 
 + SpatialTransformer class: essentially does linear interpolation
-
-### `[t_u] module.py`
-
-----
-```diff
-+ Key: Various matrics operations such as PSNR, SSIM, Mean, Stack, and so on.
 ```
-----
-
-[Done]
-#### Reconstruction ####
-+ ResBlock class: Usual ResBlock.
-
-+ EDSR class: construct 
-using multiple ResBlocks to 
-```
-----
 
 * Unfamiliar Methods
 ----
@@ -256,11 +246,20 @@ using multiple ResBlocks to
 ```
 ----
 
+### `[t_u] metrics.py`
+
+----
+```diff
++ Key: Various matrics operations such as PSNR, SSIM, Mean, Stack, and so on.
+```
+----
+
+
 ### `[t_u] callback.py`
 
 ----
 ```diff
-+ Responsibility: Tensorboard
++ Responsibility: Tensorboard and various callback functions
 ```
 ----
 
