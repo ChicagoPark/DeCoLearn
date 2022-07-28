@@ -265,7 +265,6 @@ class ResBlock(nn.Module):
 
         return res
 
-
 class EDSR(nn.Module):
     def __init__(self, dimension, n_resblocks, n_feats, res_scale, in_channels=1, out_channels=1, act='relu'):
         super().__init__()
@@ -295,12 +294,156 @@ class EDSR(nn.Module):
         self.body = nn.Sequential(*m_body)
         self.tail = nn.Sequential(*m_tail)
 
-    def forward(self, x):
+    def forward(self, x, P = None, S = None, y = None):
         x = self.head(x)
 
         res = self.body(x)
         res += x
 
         x = self.tail(res)
+
+        return x
+
+import sys
+sys.path.append(".")
+
+class CNNBlock(nn.Module):
+    name = 'CNN'
+
+    def __init__(self):
+        super().__init__()
+
+        # self.nn = DnCNN(
+        #     dimension=2,
+        #     depth=5,
+        #     n_channels=32,
+        #     i_nc=2,
+        #     o_nc=2,
+        # )
+        self.nn = UNet(
+            dimension=2,
+            i_nc=2,
+            o_nc=2,
+            f_root=32,
+            conv_times=3,
+            is_bn=False,
+            activation='relu',
+            is_residual=False,
+            up_down_times=3,
+            is_spe_norm=True,
+            padding=(0, 0)
+        )
+
+
+    def forward(self, x, P = None, S = None, y = None):
+        x_hat = self.nn(x)
+        return x_hat
+
+#def fmult(x, S, P):
+
+def fmult(x, S, P):
+    # x, groundtruth, shape: batch, width, height; dtype: complex
+    # S, sensitivity maps, shape: batch, coils, width, height; dtype: complex
+    # P, sampling mask, shape: batch, width, height; dtype: float/bool
+
+    # compute forward of fast MRI, y = PFSx
+
+    # S
+    x = torch.view_as_complex(x).unsqueeze(1)
+
+    x = x * S
+
+    # F
+    y = torch.fft.fft2(x)
+
+    # P
+    P = torch.view_as_complex(P).unsqueeze(1)
+    y = y * P
+
+    y = y + P
+
+    y = torch.view_as_real(y)
+
+    return y
+
+def ftran(y, S, P):
+    # y, under-sampled measurements, shape: batch, coils, width, height; dtype: complex
+    # S, sensitivity maps, shape: batch, coils, width, height; dtype: complex
+    # P, sampling mask, shape: batch, width, height; dtype: float/bool
+
+    # compute adjoint of fast MRI, x = S^H F^H P^H x
+    y = torch.view_as_complex(y)
+    P = torch.view_as_complex(P)
+    P = P.unsqueeze(1)
+
+    # P^H
+    y = y - P
+    y = y * P
+
+    # F^H
+    x = torch.fft.ifft2(y)
+
+    # S^H
+
+    x = x * torch.conj(S)
+
+    x = x.sum(1)
+
+    x = torch.view_as_real(x)
+
+    return x
+
+import json
+
+class DeepUnfoldingBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        with open('config.json') as File:
+            config = json.load(File)
+
+        self.nn = EDSR(
+                n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
+                n_feats=config['module']['recon']['EDSR']['n_feats'],
+                res_scale=config['module']['recon']['EDSR']['res_scale'],
+                in_channels=2,
+                out_channels=2,
+                dimension=2,)
+        '''
+        self.nn = CNNBlock()
+        self.nn = torch.load("C:/Users/pyiph/Desktop/DeCoLearn/decolearn/best_model/recon/best_valid_psnr.pt")
+        '''
+        self.gamma = 0.5
+        self.alpha = 0.5
+
+
+    def forward(self, x, P, S, y):
+        x = x.permute([0, 2, 3, 1]).contiguous()
+
+        with open('config.json') as File:
+            config = json.load(File)
+
+        dc = fmult(x, S, P)  # A x
+        dc = ftran(dc - y, S, P)  # A^H (Ax - y)
+        x = x - self.gamma * dc  # x^+ = x - gamma * A^H (Ax - y)
+
+        x = x.permute([0, 3, 1, 2]).contiguous()
+
+        prior = self.nn(x, P, S, y)
+
+        return self.alpha * prior + (1 - self.alpha) * x
+
+class DeepUnfolding(nn.Module):
+    name = 'DU'
+
+    def __init__(self, iterations):
+        super().__init__()
+
+        self.du_block = DeepUnfoldingBlock()
+        self.iterations = iterations
+
+    def forward(self, x, P, S, y):
+
+        for _ in range(self.iterations):
+            x = self.du_block(x, P, S, y)
 
         return x
