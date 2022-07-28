@@ -11,10 +11,8 @@ torch.manual_seed(0)
 random.seed(0)
 np.random.seed(0)
 
-
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
-
 
 def main(gpu_index, is_optimize_regis):
 
@@ -27,13 +25,13 @@ def main(gpu_index, is_optimize_regis):
     config['setting']['save_folder'] = datetime.datetime.now().strftime("%m%d%H%M") + '_decolearn_is_optimize_regis=[%s]' % (str(is_optimize_regis))
 
     from torch_util.module import cvpr2018_net as voxelmorph
-    from torch_util.module import EDSR
+    from torch_util.module import EDSR, CNNBlock, DeepUnfolding
     from method import DeCoLearn as DeCoLearn
     from dataset.modl import load_synthetic_MoDL_dataset
 
     nf_enc = config['module']['regis']['nf_enc']
     nf_dec = config['module']['regis']['nf_dec']
-
+    '''
     recon_module = EDSR(
             n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
             n_feats=config['module']['recon']['EDSR']['n_feats'],
@@ -42,7 +40,9 @@ def main(gpu_index, is_optimize_regis):
             out_channels=2,
             dimension=2,
         )
-
+    #recon_module = CNNBlock()
+    '''
+    recon_module = DeepUnfolding(5)
     regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
 
     method_dict = {
@@ -59,7 +59,8 @@ def main(gpu_index, is_optimize_regis):
             nonlinear_theta=config['dataset']['synthetic']['theta'],
             translation=config['dataset']['synthetic']['translation'],
             rotate=config['dataset']['synthetic']['rotate'],
-            scale=config['dataset']['synthetic']['scale'])
+            scale=config['dataset']['synthetic']['scale'],
+            mul_coil = config['dataset']['multi_coil'])
 
 
     method_dict[config['setting']['method']].train(

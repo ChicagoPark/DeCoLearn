@@ -21,7 +21,8 @@
                 "root_path": "./dataset/",
                 "mask_type": "cartesian",
                 "mask_fold": 3,
-                "input_snr": 40
+                "input_snr": 40,
+                "multi_coil": true
         },
 
         "method": {
@@ -51,7 +52,7 @@
                         "recon_net": "EDSR",
 
                         "EDSR": {
-                                "n_resblocks": 13,
+                                "n_resblocks": 12,
                                 "n_feats": 64,
                                 "res_scale": 1
                         }
@@ -62,7 +63,7 @@
         "train": {
                 "batch_size": 1,
 
-                "num_workers": 4,
+                "num_workers": 0,
                 "verbose_batch": 10,
                 "train_epoch": 100,
                 "checkpoint_epoch": 10,
