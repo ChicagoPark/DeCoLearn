@@ -25,7 +25,7 @@ def main(gpu_index, is_optimize_regis):
     config['setting']['save_folder'] = datetime.datetime.now().strftime("%m%d%H%M") + '_decolearn_is_optimize_regis=[%s]' % (str(is_optimize_regis))
 
     from torch_util.module import cvpr2018_net as voxelmorph
-    from torch_util.module import EDSR, CNNBlock, DeepUnfolding
+    from torch_util.module import EDSR, DeepUnfolding
     from method import DeCoLearn as DeCoLearn
     from dataset.modl import load_synthetic_MoDL_dataset
 
@@ -40,7 +40,6 @@ def main(gpu_index, is_optimize_regis):
             out_channels=2,
             dimension=2,
         )
-    #recon_module = CNNBlock()
     '''
     recon_module = DeepUnfolding(5)
     regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
