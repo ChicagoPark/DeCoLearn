@@ -51,6 +51,7 @@ class DictDataset(Dataset):
 
         moved_x = self.__data_dict['moved_x'][slice_]
         moved_y_tran = self.__data_dict['moved_y_tran'][slice_]
+        sensitivity_map = self.__data_dict['sensitivity_map'][slice_]
 
         moved_y = self.__data_dict['moved_y'][slice_]
         moved_mask = self.__data_dict['moved_mask'][slice_]
@@ -61,7 +62,7 @@ class DictDataset(Dataset):
         fixed_y = self.__data_dict['fixed_y'][slice_]
         fixed_mask = self.__data_dict['fixed_mask'][slice_]
 
-        return moved_x, moved_y_tran, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask
+        return moved_x, moved_y_tran, sensitivity_map, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask
 
 
 def train(
@@ -112,6 +113,7 @@ def train(
     ########################
     # Dataset
     ########################
+
     train_dataloader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=num_workers)
     train_iter_total = int(train_dataset.__len__() / batch_size)
@@ -121,7 +123,7 @@ def train(
     valid_iter_total = int(valid_dataset.__len__() / 1)
 
     sample_indices = [10, 20, 30]
-    valid_sample_moved_x, valid_sample_moved_y_tran, valid_sample_moved_y, valid_sample_moved_mask, \
+    valid_sample_moved_x, valid_sample_moved_y_tran, valid_sensitivity_map, valid_sample_moved_y, valid_sample_moved_mask, \
         valid_sample_fixed_x, valid_sample_fixed_y_tran, valid_sample_fixed_y, valid_sample_fixed_mask \
         = (i.cuda() for i in next(iter(
             DataLoader(Subset(valid_dataset, sample_indices), batch_size=len(sample_indices)))))
@@ -209,10 +211,8 @@ def train(
 
         iter_ = tqdm(train_dataloader, desc='Train [%.3d/%.3d]' % (global_epoch, train_epoch), total=train_iter_total)
         for i, train_data in enumerate(iter_):
-
-            moved_x, moved_y_tran, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
+            moved_x, moved_y_tran, sensitivity_map, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
                 (i.cuda() for i in train_data)
-
             log_batch = {}
 
             regis_module.train()
@@ -221,8 +221,8 @@ def train(
             if is_optimize_regis:
 
                 for j in range(regis_batch):
-                    fixed_y_tran_recon = recon_module(fixed_y_tran).detach()
-                    moved_y_tran_recon = recon_module(moved_y_tran).detach()
+                    fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
+                    moved_y_tran_recon = recon_module(moved_y_tran, moved_mask, sensitivity_map, moved_y)
 
                     fixed_y_tran_recon = torch.nn.functional.pad(
                         torch.sqrt(torch.sum(fixed_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
@@ -267,8 +267,8 @@ def train(
             recon_module.train()
 
             for j in range(recon_batch):
-                fixed_y_tran_recon = recon_module(fixed_y_tran)
-                moved_y_tran_recon = recon_module(moved_y_tran)
+                fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
+                moved_y_tran_recon = recon_module(moved_y_tran, moved_mask, sensitivity_map, moved_y)
 
                 if is_optimize_regis:
                     fixed_y_tran_recon_abs = torch.nn.functional.pad(
@@ -281,8 +281,9 @@ def train(
                     wrap_m2f = torch.cat([trf(tmp, flow_m2f) for tmp in [
                         torch.unsqueeze(moved_y_tran_recon[:, 0], 1), torch.unsqueeze(moved_y_tran_recon[:, 1], 1)
                     ]], 1)
-
-                    wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous())))
+                    from torch_util.module import ftran, fmult
+                    #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous())))
+                    wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask)
 
                     _, flow_f2m = regis_module(fixed_y_tran_recon_abs, moved_y_tran_recon_abs)
                     flow_f2m = flow_f2m[..., 4:-4]
@@ -290,21 +291,30 @@ def train(
                         torch.unsqueeze(fixed_y_tran_recon[:, 0], 1), torch.unsqueeze(fixed_y_tran_recon[:, 1], 1)
                     ]], 1)
 
-                    wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous())))
+                    #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous())))
+                    wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask)
 
                 else:
-                    wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
-                    wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
+                    wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask)
+                    wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask)
+                    #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
+                    #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
 
                 recon_loss_m2f = recon_loss_fn(wrap_y_m2f, fixed_y)
                 recon_loss_f2m = recon_loss_fn(wrap_y_f2m, moved_y)
 
                 recon_loss = recon_loss_f2m + recon_loss_m2f
-
+                '''
                 recon_loss_consensus_fixed = recon_loss_fn(
                     fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))), fixed_y)
                 recon_loss_consensus_moved = recon_loss_fn(
                     moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))), moved_y)
+                '''
+                recon_loss_consensus_fixed = recon_loss_fn(
+                        fmult(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask), fixed_y)
+                recon_loss_consensus_moved = recon_loss_fn(
+                        fmult(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask), moved_y)
+
 
                 if loss_recon_consensus_COEFF > 0:
                     recon_loss += loss_recon_consensus_COEFF * (recon_loss_consensus_fixed + recon_loss_consensus_moved)
@@ -346,10 +356,10 @@ def train(
             iter_ = tqdm(valid_dataloader, desc='Valid [%.3d/%.3d]' % (global_epoch, train_epoch),
                          total=valid_iter_total)
             for i, valid_data in enumerate(iter_):
-                moved_x, moved_y_tran, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
+                moved_x, moved_y_tran, sensitivity_map, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
                     (i.cuda() for i in valid_data)
 
-                fixed_y_tran_recon = recon_module(fixed_y_tran)
+                fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
 
                 log_batch = {
 
@@ -359,7 +369,7 @@ def train(
                 }
                 metrics.update_state(log_batch)
 
-            valid_sample_fixed_y_tran_recon = recon_module(valid_sample_fixed_y_tran)
+            valid_sample_fixed_y_tran_recon = recon_module(valid_sample_fixed_y_tran, valid_sample_fixed_mask, sensitivity_map, valid_sample_fixed_y)
 
         log_epoch = metrics.result()
         metrics.reset_state()
@@ -402,10 +412,9 @@ def test(
     with torch.no_grad():
         iter_ = tqdm(test_dataloader, desc='Test', total=len(test_dataset))
         for i, test_data in enumerate(iter_):
-            moved_x, moved_y_tran, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
+            moved_x, moved_y_tran, sensitivity_map, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
                 (i.cuda() for i in test_data)
-
-            fixed_y_tran_recon = recon_module(fixed_y_tran)
+            fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
             fixed_y_tran_recon = abs_helper(fixed_y_tran_recon)
 
             fixed_x = abs_helper(fixed_x)
