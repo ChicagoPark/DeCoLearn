@@ -1,3 +1,6 @@
+import sys
+sys.path.append(".")
+
 import os
 import h5py
 from tqdm import tqdm
@@ -83,9 +86,112 @@ def generate_nonlinear_grid(imgSize, P, theta, sigma, mask):
 
     return grid
 
+def fmult(ipt, type_, fold, noise_snr, sensitivity_map, mul_coil, pre_generated_mask=None, pre_generate_noise=None):
+    # print(f"\n\n fmult input ipt: {ipt.shape}")
+    # print(f"fmult input S: {sensitivity_map.shape}\n")
+    if len(ipt.shape) == 3:
+        comp, num_width, num_height = ipt.shape
+        ipt = ipt.permute([1, 2, 0]).contiguous()
+    else:
+        print("\nHehehehr\nhe")
+        _ , num_width, num_height, _ = ipt.shape
+
+    ipt = torch.view_as_complex(ipt)
+
+    # y_mul_coil: to return y_ considering multi coil (mul_coil, num_width, num_height)
+    if mul_coil == False:
+        ipt = torch.fft.fft2(ipt)
+        ipt = torch.view_as_real(ipt)
+
+        if pre_generated_mask is None:
+            mask_ = generate_mask(type_=type_, fold=fold, imgSize=(num_width, num_height)).squeeze(0)
+
+        else:
+            mask_ = pre_generated_mask
+
+        ipt = ipt * mask_
+
+        if pre_generate_noise is not None:
+            y_ = ipt + pre_generate_noise
+            noise = pre_generate_noise
+        else:
+            y_, noise = addwgn(ipt, noise_snr)
+
+    else:  # mul_coil == True
+        # sensitivity_map = sensitivity_map.permute([1, 2, 3, 0]).contiguous()
+        # sensitivity_map = torch.view_as_complex(sensitivity_map)
+        # y = PFSx
+        ipt = ipt.unsqueeze(0)
+
+        # print(f"inside of the fmult ipt: {ipt.shape}")
+        # print(f"inside of the fmult s : {s.shape}")
+
+        # print(f"ipt shape: {ipt.shape}")
+        # print(f"sen shape: {sensitivity_map.shape}")
+        # S
+        ipt = ipt * sensitivity_map
+
+        # F
+        ipt = torch.fft.fft2(ipt)
+
+        ipt = torch.view_as_real(ipt)
+
+        if pre_generated_mask is None:
+            mask_ = generate_mask(type_=type_, fold=fold, imgSize=(num_width, num_height)).squeeze(
+                0)  # shape ([256, 232, 2])
+            # print(f"fmult input mask_: {mask_.shape}\n")
+        else:
+            mask_ = pre_generated_mask  # shape ([256, 232, 2])
+            # print(f"fmult input mask_: {mask_.shape}\n")
+
+        # P
+        ipt = ipt * mask_.unsqueeze(0)
+
+        if pre_generate_noise is not None:
+            # pre_generate_noise = pre_generate_noise.unsqueeze(0)
+            y_ = ipt + pre_generate_noise
+            noise = pre_generate_noise
+        else:
+            y_, noise = addwgn(ipt, noise_snr)
+
+    return y_, mask_, noise
+
+def ftran(y, S, P, mul_coil):
+    # y, under-sampled measurements, shape: batch, coils, width, height; dtype: complex
+    # S, sensitivity maps, shape: batch, coils, width, height; dtype: complex
+    # P, sampling mask, shape: batch, width, height; dtype: float/bool
+    # print(f"\n\n ftran input y: {y.shape}")
+    # print(f"ftran input S: {S.shape}\n")
+    # print(f"ftran input P: {P.shape}\n")
+    # compute adjoint of fast MRI, x = S^H F^H P^H x
+    if mul_coil is True:
+        # P^H
+        # print(f"BEFORE\ny: {y.shape}\nP: {P.shape}\nS: {S.shape}\n\n")
+        y = torch.view_as_complex(y)
+        # print(f"\n\n\nP: {P.dtype}\n\n")
+        P = torch.view_as_complex(P)
+        P = P.unsqueeze(0)
+        # print(f"AFTER \n\ny: {y.shape}\nP: {P.shape}\nS: {S.shape}\n\n")
+
+        y = y * P
+        # F^H
+        x = torch.fft.ifft2(y)
+
+        # S^H
+        x = x * torch.conj(S)
+
+        x = x.sum(0)
+
+        x = torch.view_as_real(x)
+
+    else:
+        x = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(y)))
+    # print(f"ftran output x {x.shape}\n\n")
+    return x
 
 def load_synthetic_MoDL_dataset(
         root_folder: str = './dataset/',
+#        root_folder: str = '',
         translation: tuple = [0, 0],
         rotate: float = 0,
         scale: int = 0,
@@ -95,8 +201,8 @@ def load_synthetic_MoDL_dataset(
         mask_type: str = 'cartesian',
         mask_fold: int = 4,
         input_snr: int = 40,
+        mul_coil: bool = True
 ):
-
     #######################################
     # Source H5 File
     #######################################
@@ -123,9 +229,12 @@ def load_synthetic_MoDL_dataset(
                     print(f[k].shape, k, f[k].dtype)
 
                 x = np.concatenate([f['trnOrg'], f['tstOrg']], 0)
-
                 x = np.stack([x.real, x.imag], 1)
                 source_h5.create_dataset(name='x', data=x)
+
+                s = np.concatenate([f['trnCsm'], f['tstCsm']], 0)
+                #s = np.stack([s.real, s.imag], 1)
+                source_h5.create_dataset(name='s', data=s)
 
                 to_tiff(np.sqrt(x[:, 0] ** 2 + x[:, 1] ** 2), path=source_qc + 'fixed_x.tiff', is_normalized=False)
 
@@ -211,28 +320,7 @@ def load_synthetic_MoDL_dataset(
     mri_qc = alignment_path + "%s_qc/" % mri_file_name
     check_and_mkdir(mri_qc)
 
-    def fmult(ipt, type_, fold, noise_snr, pre_generated_mask=None, pre_generate_noise=None):
-        comp, num_width, num_height = ipt.shape
-        ipt = ipt.permute([1, 2, 0]).contiguous()
 
-        ipt = torch.view_as_complex(ipt)
-        ipt = torch.fft.fft2(ipt)
-        ipt = torch.view_as_real(ipt)
-
-        if pre_generated_mask is None:
-            mask_ = generate_mask(type_=type_, fold=fold, imgSize=(num_width, num_height)).squeeze(0)
-        else:
-            mask_ = pre_generated_mask
-
-        ipt = ipt * mask_
-
-        if pre_generate_noise is not None:
-            y_ = ipt + pre_generate_noise
-            noise = pre_generate_noise
-        else:
-            y_, noise = addwgn(ipt, noise_snr)
-
-        return y_, mask_, noise
 
     if not os.path.exists(mri_h5_path):
         print("Not Found MRI H5 File. Start Generating it ...")
@@ -241,24 +329,30 @@ def load_synthetic_MoDL_dataset(
             with h5py.File(alignment_h5_path, 'r') as alignment_h5:
                 fixed_x = torch.from_numpy(source_h5['x'][:])
                 moved_x = torch.from_numpy(alignment_h5['moved_x'][:])
+                sensitivity_map = torch.from_numpy(source_h5['s'][:])
 
                 num_shape = fixed_x.shape[0]
                 fixed_y, fixed_mask, fixed_y_tran, moved_y, moved_mask, moved_y_tran, moved_y_warped_truth, moved_y_tran_warped_truth = [], [], [], [], [], [], [], []
                 for i_shape in tqdm(range(num_shape)):
-                    fixed_y_cur, fixed_mask_cur, fixed_noise_cur = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, noise_snr=input_snr)
-                    moved_y_cur, moved_mask_cur, moved_noise_cur = fmult(moved_x[i_shape], type_=mask_type, fold=mask_fold, noise_snr=input_snr)
-                    moved_y_warped_truth_cur, moved_mask_warped_truth_cur, _ = fmult(
-                        fixed_x[i_shape],
-                        type_=mask_type,
-                        fold=mask_fold,
-                        noise_snr=input_snr,
-                        pre_generate_noise=moved_noise_cur,
-                        pre_generated_mask=moved_mask_cur
-                    )
+                    fixed_y_cur, fixed_mask_cur, fixed_noise_cur = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil = mul_coil, noise_snr=input_snr)
+                    moved_y_cur, moved_mask_cur, moved_noise_cur = fmult(moved_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil= mul_coil, noise_snr=input_snr)
+                    moved_y_warped_truth_cur, moved_mask_warped_truth_cur, _ = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map=sensitivity_map[i_shape], mul_coil = mul_coil, noise_snr=input_snr, pre_generate_noise=moved_noise_cur, pre_generated_mask=moved_mask_cur)
 
-                    fixed_y_tran_cur = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(fixed_y_cur)))
-                    moved_y_tran_cur = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(moved_y_cur)))
-                    moved_y_tran_warped_truth_cur = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(moved_y_warped_truth_cur)))
+                    #fixed_y_tran_cur = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(fixed_y_cur)))
+                    #moved_y_tran_cur = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(moved_y_cur)))
+                    #moved_y_tran_warped_truth_cur = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(moved_y_warped_truth_cur)))
+
+                    #print(f"\n\nCurrent: moved_y_warped_truth_cur: {fixed_y_cur.shape}")
+                    #print(f"\n\nCurrent: moved_y_warped_truth_cur: {moved_y_cur.shape}")
+                    #print(f"\n\nCurrent: moved_y_warped_truth_cur: {moved_y_warped_truth_cur.shape}")
+
+                    fixed_y_tran_cur = ftran(fixed_y_cur, sensitivity_map[i_shape], fixed_mask_cur, mul_coil=mul_coil)
+                    moved_y_tran_cur = ftran(moved_y_cur, sensitivity_map[i_shape], moved_mask_cur, mul_coil=mul_coil)
+                    moved_y_tran_warped_truth_cur = ftran(moved_y_warped_truth_cur, sensitivity_map[i_shape], moved_mask_warped_truth_cur, mul_coil=mul_coil)
+
+                    #print(f"\n\nCurrent: fixed_y_tran_cur: {fixed_y_tran_cur.shape}")
+                    #print(f"\n\nCurrent: moved_y_tran_cur: {moved_y_tran_cur.shape}")
+                    #print(f"\nCurrent: moved_y_tran_truth_cur: {moved_y_tran_warped_truth_cur.shape}")
 
                     fixed_y.append(fixed_y_cur)
                     fixed_mask.append(fixed_mask_cur)
@@ -270,6 +364,7 @@ def load_synthetic_MoDL_dataset(
 
                     moved_y_warped_truth.append(moved_y_warped_truth_cur)
                     moved_y_tran_warped_truth.append(moved_y_tran_warped_truth_cur)
+
 
                 fixed_y, fixed_mask, fixed_y_tran, moved_y, moved_mask, moved_y_tran, moved_y_warped_truth, moved_y_tran_warped_truth = [
                     torch.stack(i, 0) for i in [fixed_y, fixed_mask, fixed_y_tran, moved_y, moved_mask, moved_y_tran, moved_y_warped_truth, moved_y_tran_warped_truth]]
@@ -284,14 +379,25 @@ def load_synthetic_MoDL_dataset(
                     mri_h5.create_dataset(name='moved_y_warped_truth', data=moved_y_warped_truth)
                     mri_h5.create_dataset(name='moved_y_tran_warped_truth', data=moved_y_tran_warped_truth)
 
-                to_tiff(torch.sqrt(fixed_y[..., 0] ** 2 + fixed_y[..., 1] ** 2), path=mri_qc + 'fixed_y.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(fixed_mask[..., 0] ** 2 + fixed_mask[..., 1] ** 2), path=mri_qc + 'fixed_mask.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(fixed_y_tran[..., 0] ** 2 + fixed_y_tran[..., 1] ** 2), path=mri_qc + 'fixed_y_tran.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(moved_y[..., 0] ** 2 + moved_y[..., 1] ** 2), path=mri_qc + 'moved_y.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(moved_mask[..., 0] ** 2 + moved_mask[..., 1] ** 2), path=mri_qc + 'moved_mask.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(moved_y_tran[..., 0] ** 2 + moved_y_tran[..., 1] ** 2), path=mri_qc + 'moved_y_tran.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(moved_y_warped_truth[..., 0] ** 2 + moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_warped_truth.tiff', is_normalized=False)
-                to_tiff(torch.sqrt(moved_y_tran_warped_truth[..., 0] ** 2 + moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_tran_warped_truth.tiff', is_normalized=False)
+                if mul_coil is True:
+                    #to_tiff(torch.sqrt(fixed_y[..., 0] ** 2 + fixed_y[..., 1] ** 2), path=mri_qc + 'fixed_y.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(fixed_mask[..., 0] ** 2 + fixed_mask[..., 1] ** 2), path=mri_qc + 'fixed_mask.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(fixed_y_tran[..., 0] ** 2 + fixed_y_tran[..., 1] ** 2), path=mri_qc + 'fixed_y_tran.tiff', is_normalized=False)
+                    #to_tiff(torch.sqrt(moved_y[..., 0] ** 2 + moved_y[..., 1] ** 2), path=mri_qc + 'moved_y.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_mask[..., 0] ** 2 + moved_mask[..., 1] ** 2), path=mri_qc + 'moved_mask.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_y_tran[..., 0] ** 2 + moved_y_tran[..., 1] ** 2), path=mri_qc + 'moved_y_tran.tiff', is_normalized=False)
+                    #to_tiff(torch.sqrt(moved_y_warped_truth[..., 0] ** 2 + moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_warped_truth.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_y_tran_warped_truth[..., 0] ** 2 + moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_tran_warped_truth.tiff', is_normalized=False)
+
+                else:
+                    to_tiff(torch.sqrt(fixed_y[..., 0] ** 2 + fixed_y[..., 1] ** 2), path=mri_qc + 'fixed_y.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(fixed_mask[..., 0] ** 2 + fixed_mask[..., 1] ** 2), path=mri_qc + 'fixed_mask.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(fixed_y_tran[..., 0] ** 2 + fixed_y_tran[..., 1] ** 2), path=mri_qc + 'fixed_y_tran.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_y[..., 0] ** 2 + moved_y[..., 1] ** 2), path=mri_qc + 'moved_y.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_mask[..., 0] ** 2 + moved_mask[..., 1] ** 2), path=mri_qc + 'moved_mask.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_y_tran[..., 0] ** 2 + moved_y_tran[..., 1] ** 2), path=mri_qc + 'moved_y_tran.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_y_warped_truth[..., 0] ** 2 + moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_warped_truth.tiff', is_normalized=False)
+                    to_tiff(torch.sqrt(moved_y_tran_warped_truth[..., 0] ** 2 + moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_tran_warped_truth.tiff', is_normalized=False)
 
     else:
         print("Found MRI H5 File.")
@@ -303,8 +409,28 @@ def load_synthetic_MoDL_dataset(
     alignment_h5 = h5py.File(alignment_h5_path, 'r')
     mri_h5 = h5py.File(mri_h5_path, 'r')
 
+    print(f"\n\n---Youngil - x: {source_h5['x'].shape}")
+    print(f"---Youngil - s: {source_h5['s'].shape}")
+    print(f"---Youngil - moved_x: {alignment_h5['moved_x'].shape}")
+
+    print(f"\n---Youngil - moved_y: {mri_h5['moved_y'].shape}")
+    print(f"---Youngil - moved_mask: {mri_h5['moved_mask'].shape}")
+    print(f"---Youngil - moved_y_tran: {mri_h5['moved_y_tran'].shape}")
+
+    print(f"\n---Youngil - fixed_y: {mri_h5['fixed_y'].shape}")
+    print(f"---Youngil - fixed_mask: {mri_h5['fixed_mask'].shape}")
+    print(f"---Youngil - fixed_y_tran: {mri_h5['fixed_y_tran'].shape}")
+
+    print(f"\n---Youngil - moved_y_warped_truth: {mri_h5['moved_y_warped_truth'].shape}")
+    print(f"---Youngil - moved_y_tran_warped_truth: {mri_h5['moved_y_tran_warped_truth'].shape}")
+
+    print(f"---moved_y_tran: {np.transpose(mri_h5['moved_y_tran'][:], [0, 3, 1, 2]).shape}")
+    print(f"---fixed_y_tran: {np.transpose(mri_h5['fixed_y_tran'][:], [0, 3, 1, 2]).shape}")
+    print(f"---moved_y_tran_warped_truth: {(np.transpose(mri_h5['moved_y_tran_warped_truth'][:], [0, 3, 1, 2])).shape}")
+
     ret_cur = {
         'fixed_x': source_h5['x'][:],
+        'sensitivity_map': source_h5['s'][:],
         'moved_x': alignment_h5['moved_x'][:],
 
         'moved_y': mri_h5['moved_y'][:],
@@ -319,6 +445,15 @@ def load_synthetic_MoDL_dataset(
         'moved_y_tran_warped_truth': np.transpose(mri_h5['moved_y_tran_warped_truth'][:], [0, 3, 1, 2])
     }
 
+
     ret = ret_cur
 
     return ret
+
+'''
+import fire
+
+if __name__ == '__main__':
+    mul_coil = True
+    fire.Fire(load_synthetic_MoDL_dataset)
+'''
