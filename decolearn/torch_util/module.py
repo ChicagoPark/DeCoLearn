@@ -304,42 +304,6 @@ class EDSR(nn.Module):
 
         return x
 
-import sys
-sys.path.append(".")
-
-class CNNBlock(nn.Module):
-    name = 'CNN'
-
-    def __init__(self):
-        super().__init__()
-
-        # self.nn = DnCNN(
-        #     dimension=2,
-        #     depth=5,
-        #     n_channels=32,
-        #     i_nc=2,
-        #     o_nc=2,
-        # )
-        self.nn = UNet(
-            dimension=2,
-            i_nc=2,
-            o_nc=2,
-            f_root=32,
-            conv_times=3,
-            is_bn=False,
-            activation='relu',
-            is_residual=False,
-            up_down_times=3,
-            is_spe_norm=True,
-            padding=(0, 0)
-        )
-
-
-    def forward(self, x, P = None, S = None, y = None):
-        x_hat = self.nn(x)
-        return x_hat
-
-#def fmult(x, S, P):
 
 def fmult(x, S, P):
     # x, groundtruth, shape: batch, width, height; dtype: complex
