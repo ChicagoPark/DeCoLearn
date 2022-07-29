@@ -324,8 +324,6 @@ def fmult(x, S, P):
     P = torch.view_as_complex(P).unsqueeze(1)
     y = y * P
 
-    y = y + P
-
     y = torch.view_as_real(y)
 
     return y
@@ -341,7 +339,6 @@ def ftran(y, S, P):
     P = P.unsqueeze(1)
 
     # P^H
-    y = y - P
     y = y * P
 
     # F^H
