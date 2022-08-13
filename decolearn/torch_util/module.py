@@ -682,7 +682,7 @@ class DeepUnfoldingBlock(nn.Module):
             in_channels=2,
             out_channels=2,
             dimension=2, )
-        self.gamma = 0.1
+        self.gamma = 0.01
         self.alpha = 1.0
 
     def forward(self, x, P, S, y):
