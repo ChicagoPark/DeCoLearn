@@ -670,30 +670,18 @@ def ftran(y, S, P):
 import json
 
 class DeepUnfoldingBlock(nn.Module):
-    def __init__(self, moduleSelection):
+    def __init__(self):
         super().__init__()
         with open('config.json') as File:
             config = json.load(File)
 
-        if(moduleSelection == 0 or moduleSelection == 3 or moduleSelection == 4):
-            print("\n\nEDSR\n\n")
-            self.nn = EDSR(
-                n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
-                n_feats=config['module']['recon']['EDSR']['n_feats'],
-                res_scale=config['module']['recon']['EDSR']['res_scale'],
-                in_channels=2,
-                out_channels=2,
-                dimension=2, )
-        elif (moduleSelection == 2):
-            print("\n\nDNCNN\n\n")
-            self.nn = DnCNN(dimension=2)
-        else:
-            print("\n\nCNNBlock\n\n")
-            self.nn = CNNBlock()
-        '''
-        self.nn = CNNBlock()
-        self.nn = torch.load("C:/Users/pyiph/Desktop/DeCoLearn/decolearn/best_model/recon/best_valid_psnr.pt")
-        '''
+        self.nn = EDSR(
+            n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
+            n_feats=config['module']['recon']['EDSR']['n_feats'],
+            res_scale=config['module']['recon']['EDSR']['res_scale'],
+            in_channels=2,
+            out_channels=2,
+            dimension=2, )
         self.gamma = 0.1
         self.alpha = 1.0
 
@@ -721,7 +709,7 @@ class DeepUnfolding(nn.Module):
         self.du_block = nn.ModuleList()
         self.iterations = iterations
         for i in range(self.iterations):
-            DUblock = DeepUnfoldingBlock(moduleSelection=i)
+            DUblock = DeepUnfoldingBlock()
             self.du_block.append(DUblock)
 
     def forward(self, x, P, S, y):
