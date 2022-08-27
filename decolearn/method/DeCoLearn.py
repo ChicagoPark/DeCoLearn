@@ -383,7 +383,6 @@ def train(
         regis_callbacks.call_epoch_end_hook(log_epoch, image_epoch, global_epoch)
         recon_callbacks.call_epoch_end_hook(log_epoch, image_epoch, global_epoch)
 
-
 def test(
         load_dataset_fn,
         recon_module: nn.Module,
