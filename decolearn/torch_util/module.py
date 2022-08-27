@@ -138,7 +138,6 @@ class cvpr2018_net(nn.Module):
 
         return y, flow
 
-
 class SpatialTransformer(nn.Module):
     """
     [SpatialTransformer] represesents a spatial transformation block
@@ -674,7 +673,6 @@ class DeepUnfoldingBlock(nn.Module):
         super().__init__()
         with open('config.json') as File:
             config = json.load(File)
-
         self.nn = EDSR(
             n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
             n_feats=config['module']['recon']['EDSR']['n_feats'],
@@ -684,6 +682,13 @@ class DeepUnfoldingBlock(nn.Module):
             dimension=2, )
         self.gamma = 0.01
         self.alpha = 1.0
+        '''
+        self.nn = CNNBlock()
+        self.gamma = 0.5
+        self.alpha = 0.5
+        #self.gamma = 1.0
+        #self.alpha = 1.0
+        '''
 
     def forward(self, x, P, S, y):
         x = x.permute([0, 2, 3, 1]).contiguous()
