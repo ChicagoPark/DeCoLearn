@@ -86,7 +86,6 @@ def to_tiff(x, path, is_normalized=True):
 
     tiff.imwrite(path, x, imagej=True, ijmetadata={'Slice': n_slice})
 
-
 def write_test(log_dict, img_dict, save_path, is_save_mat=False, is_save_tiff=True):
     if log_dict:
         # Write Log_dict Information

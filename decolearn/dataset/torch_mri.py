@@ -180,13 +180,11 @@ def fmult(x: torch.Tensor, mask: torch.Tensor):
 
     return x_coml
 
-
 def ftran(x_coml: torch.Tensor, mask: torch.Tensor):
     x_coml = x_coml * mask
     x_real = torch.irfft(x_coml, 2, onesided=False)
 
     return x_real
-
 
 def fmult_nd(
         x: torch.Tensor,
@@ -273,7 +271,6 @@ def fmult_nd(
 
     else:
         raise NotImplementedError('only 4D x(batch, channel, height, width) or 3d x(channel, height, width) is supported currently.')
-
 
 def ftran_nd(
         y,

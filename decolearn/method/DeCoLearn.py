@@ -251,7 +251,10 @@ def train(
                     regis_optimizer.zero_grad()
                     regis_loss.backward()
 
-                    torch.nn.utils.clip_grad_value_(regis_module.parameters(), clip_value=1)
+                    #torch.nn.utils.clip_grad_value_(regis_module.parameters(), clip_value=1)
+                    #torch.nn.utils.clip_grad_value_(regis_module.parameters(), clip_value=0.3)
+                    torch.nn.utils.clip_grad_norm_(regis_module.parameters(), max_norm = 0.5)
+
 
                     regis_optimizer.step()
 
@@ -322,7 +325,9 @@ def train(
                 recon_optimizer.zero_grad()
                 recon_loss.backward()
 
-                torch.nn.utils.clip_grad_value_(recon_module.parameters(), clip_value=1)
+                #torch.nn.utils.clip_grad_value_(recon_module.parameters(), clip_value=1)
+                #torch.nn.utils.clip_grad_value_(recon_module.parameters(), clip_value=0.5)
+                torch.nn.utils.clip_grad_norm_(recon_module.parameters(), max_norm=0.5)
 
                 recon_optimizer.step()
 
@@ -330,6 +335,9 @@ def train(
                 regis_module.zero_grad()
 
                 if j == (recon_batch - 1):
+                    # to remove the gray background
+                    fixed_y_tran_recon[fixed_x == 0] = 0
+
                     log_batch.update({
                         'reconstruction_loss': recon_loss.item(),
 
@@ -361,6 +369,8 @@ def train(
 
                 fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
 
+                # to remove the gray background
+                fixed_y_tran_recon[fixed_x == 0] = 0
                 log_batch = {
 
                     'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
@@ -419,6 +429,9 @@ def test(
             fixed_x = abs_helper(fixed_x)
 
             fixed_y_tran = abs_helper(fixed_y_tran)
+            # to remove the gray background
+            fixed_y_tran[fixed_x == 0] = 0
+            fixed_y_tran_recon[fixed_x == 0] = 0
 
             log_batch = {
                 'zero_filled_ssim': compare_ssim(fixed_y_tran, fixed_x).item(),

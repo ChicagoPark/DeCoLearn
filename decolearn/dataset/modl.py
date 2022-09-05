@@ -11,7 +11,6 @@ from torch_util.common import check_and_mkdir, to_tiff
 from skimage.filters import gaussian
 from torch.nn import functional as f
 
-
 def generate_affine_grid(imgSize, translation=(0, 0), reflection=(1, 1), scale=1, rotate=0, shear=(0, 0)):
     T_translation = np.array([
         [1, 0, translation[0]],
@@ -50,7 +49,6 @@ def generate_affine_grid(imgSize, translation=(0, 0), reflection=(1, 1), scale=1
     theta = rec.unsqueeze_(0)
 
     return f.affine_grid(theta=theta, size=(1, ) + imgSize)
-
 
 def generate_nonlinear_grid(imgSize, P, theta, sigma, mask):
     grid = generate_affine_grid(imgSize=imgSize).numpy()

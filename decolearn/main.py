@@ -41,8 +41,8 @@ def main(gpu_index, is_optimize_regis):
             dimension=2,
         )
     '''
-    #recon_module = DeepUnfolding(5)
-    recon_module = DeepUnfolding(7)
+    recon_module = DeepUnfolding(8)
+    #recon_module = DeepUnfolding(9)
     regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
 
     method_dict = {
