@@ -61,7 +61,7 @@
         },
 
         "train": {
-                "batch_size":1,
+                "batch_size":3,
 
                 "num_workers": 0,
                 "verbose_batch": 10,
