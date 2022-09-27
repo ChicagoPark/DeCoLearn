@@ -90,6 +90,8 @@ def train(
     recon_batch = config['method']['proposed']['recon_batch']
 
     is_optimize_regis = config['method']['proposed']['is_optimize_regis']
+    mul_coil = config['dataset']['multi_coil']
+    training_type = config["train"]["training_type"]
 
     lambda_ = config['method']['lambda_']
     loss_regis_mse_COEFF = config['method']['loss_regis_mse']
@@ -248,12 +250,13 @@ def train(
                     if loss_regis_mse_COEFF > 0:
                         regis_loss += loss_regis_mse_COEFF * (regis_mse_loss_m2f + regis_mse_loss_f2m)
 
+
                     regis_optimizer.zero_grad()
                     regis_loss.backward()
 
                     #torch.nn.utils.clip_grad_value_(regis_module.parameters(), clip_value=1)
-                    #torch.nn.utils.clip_grad_value_(regis_module.parameters(), clip_value=0.3)
-                    torch.nn.utils.clip_grad_norm_(regis_module.parameters(), max_norm = 0.5)
+                    torch.nn.utils.clip_grad_value_(regis_module.parameters(), clip_value=0.5)
+                    #torch.nn.utils.clip_grad_norm_(regis_module.parameters(), max_norm = 0.3)
 
 
                     regis_optimizer.step()
@@ -286,7 +289,8 @@ def train(
                     ]], 1)
                     from torch_util.module import ftran, fmult
                     #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous())))
-                    wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask)
+                    #wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil)
+                    wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous()))))
 
                     _, flow_f2m = regis_module(fixed_y_tran_recon_abs, moved_y_tran_recon_abs)
                     flow_f2m = flow_f2m[..., 4:-4]
@@ -295,13 +299,17 @@ def train(
                     ]], 1)
 
                     #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous())))
-                    wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask)
+                    #wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil)
+                    wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous()))))
 
                 else:
-                    wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask)
-                    wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask)
+                    from torch_util.module import ftran, fmult
+                    #wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil)
+                    #wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil)
                     #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
                     #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
+                    wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))))
+                    wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))))
 
                 recon_loss_m2f = recon_loss_fn(wrap_y_m2f, fixed_y)
                 recon_loss_f2m = recon_loss_fn(wrap_y_f2m, moved_y)
@@ -313,11 +321,20 @@ def train(
                 recon_loss_consensus_moved = recon_loss_fn(
                     moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))), moved_y)
                 '''
+                '''
                 recon_loss_consensus_fixed = recon_loss_fn(
-                        fmult(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask), fixed_y)
+                    fmult(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil),
+                    fixed_y)
                 recon_loss_consensus_moved = recon_loss_fn(
-                        fmult(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask), moved_y)
-
+                    fmult(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil),
+                    moved_y)
+                '''
+                recon_loss_consensus_fixed = recon_loss_fn(
+                    fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (
+                        torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))), fixed_y)
+                recon_loss_consensus_moved = recon_loss_fn(
+                    moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (
+                        torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))), moved_y)
 
                 if loss_recon_consensus_COEFF > 0:
                     recon_loss += loss_recon_consensus_COEFF * (recon_loss_consensus_fixed + recon_loss_consensus_moved)
@@ -326,8 +343,8 @@ def train(
                 recon_loss.backward()
 
                 #torch.nn.utils.clip_grad_value_(recon_module.parameters(), clip_value=1)
-                #torch.nn.utils.clip_grad_value_(recon_module.parameters(), clip_value=0.5)
-                torch.nn.utils.clip_grad_norm_(recon_module.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_value_(recon_module.parameters(), clip_value=0.5)
+                #torch.nn.utils.clip_grad_norm_(recon_module.parameters(), max_norm=0.5)
 
                 recon_optimizer.step()
 
@@ -371,12 +388,42 @@ def train(
 
                 # to remove the gray background
                 fixed_y_tran_recon[fixed_x == 0] = 0
-                log_batch = {
 
-                    'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-                    'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                if training_type == "pnp":
+                    gammaList = recon_module.getGamma()
+                    alphaList = recon_module.getAlpha()
+                    log_batch = {
+                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'gamma0': gammaList[0].item(),
+                        'gamma1': gammaList[1].item(),
+                        'gamma2': gammaList[2].item(),
+                        'gamma3': gammaList[3].item(),
+                        'gamma4': gammaList[4].item(),
+                        'alpha0': alphaList[0].item(),
+                        'alpha1': alphaList[1].item(),
+                        'alpha2': alphaList[2].item(),
+                        'alpha3': alphaList[3].item(),
+                        'alpha4': alphaList[4].item()
+                    }
+                elif training_type == "red":
+                    #gammaList = recon_module.getGamma()
+                    muList = recon_module.getMu()
+                    log_batch = {
+                        'mu0': muList[0].item(),
+                        'mu1': muList[1].item(),
+                        'mu2': muList[2].item(),
+                        'mu3': muList[3].item(),
+                        'mu4': muList[4].item(),
+                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item()
+                    }
+                else:
+                    log_batch = {
+                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                    }
 
-                }
                 metrics.update_state(log_batch)
 
             valid_sample_fixed_y_tran_recon = recon_module(valid_sample_fixed_y_tran, valid_sample_fixed_mask, sensitivity_map, valid_sample_fixed_y)
