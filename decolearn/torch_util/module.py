@@ -5,6 +5,7 @@ from torch.distributions.normal import Normal
 from torch.nn.functional import pad
 
 
+
 activation_fn = {
      'relu': lambda: nn.ReLU(),
     'lrelu': lambda: nn.LeakyReLU(0.2),
@@ -617,52 +618,68 @@ class UNet(nn.Module):
 
         return ret
 
-def fmult(x, S, P):
+def fmult(x, S, P, mul_coil):
     # x, groundtruth, shape: batch, width, height; dtype: complex
     # S, sensitivity maps, shape: batch, coils, width, height; dtype: complex
     # P, sampling mask, shape: batch, width, height; dtype: float/bool
+    # mul_coil; dtype: bool
 
     # compute forward of fast MRI, y = PFSx
 
-    # S
-    x = torch.view_as_complex(x).unsqueeze(1)
+    if mul_coil == True:
+        # S
+        x = torch.view_as_complex(x).unsqueeze(1)
 
-    x = x * S
+        x = x * S
 
-    # F
-    y = torch.fft.fft2(x)
+        # F
+        y = torch.fft.fft2(x)
 
-    # P
-    P = torch.view_as_complex(P).unsqueeze(1)
-    y = y * P
+        # P
+        P = torch.view_as_complex(P).unsqueeze(1)
+        y = y * P
 
-    y = torch.view_as_real(y)
+        y = torch.view_as_real(y)
+
+    else:
+        x = torch.view_as_complex(x)
+        y = torch.fft.fft2(x)
+        P = torch.view_as_complex(P)
+
+        #print(f"\n\nYoungil\ny.shape: {y.shape}\nP.shape: {P.shape}\n\n")
+        y = y * P
+
+        y = torch.view_as_real(y)
 
     return y
 
-def ftran(y, S, P):
+def ftran(y, S, P, mul_coil):
     # y, under-sampled measurements, shape: batch, coils, width, height; dtype: complex
     # S, sensitivity maps, shape: batch, coils, width, height; dtype: complex
     # P, sampling mask, shape: batch, width, height; dtype: float/bool
+    # mul_coil; dtype: bool
+    if mul_coil is True:
+        # compute adjoint of fast MRI, x = S^H F^H P^H x
+        y = torch.view_as_complex(y)
+        P = torch.view_as_complex(P)
+        P = P.unsqueeze(1)
 
-    # compute adjoint of fast MRI, x = S^H F^H P^H x
-    y = torch.view_as_complex(y)
-    P = torch.view_as_complex(P)
-    P = P.unsqueeze(1)
+        # P^H
 
-    # P^H
-    y = y * P
+        y = y * P
 
-    # F^H
-    x = torch.fft.ifft2(y)
+        # F^H
+        x = torch.fft.ifft2(y)
 
-    # S^H
+        # S^H
 
-    x = x * torch.conj(S)
+        x = x * torch.conj(S)
 
-    x = x.sum(1)
+        x = x.sum(1)
 
-    x = torch.view_as_real(x)
+        x = torch.view_as_real(x)
+    else:
+        x = torch.view_as_real(torch.fft.ifft2(torch.view_as_complex(y)))
 
     return x
 
@@ -680,24 +697,52 @@ class DeepUnfoldingBlock(nn.Module):
             in_channels=2,
             out_channels=2,
             dimension=2, )
-        self.gamma = 0.01
-        self.alpha = 1.0
+        with open('config.json') as File:
+            config = json.load(File)
+
+        self.training_type = config["train"]["training_type"]
+        #self.gamma = nn.parameter.Parameter(data=torch.FloatTensor(0.5), requires_grad=True)
+        #self.alpha = nn.parameter.Parameter(data=torch.FloatTensor(0.5), requires_grad=True)
+        #self.mu = nn.parameter.Parameter(data=torch.FloatTensor(0.5), requires_grad=True)
+        if self.training_type == "pnp":
+            self.gamma = nn.parameter.Parameter(data=torch.as_tensor(0.1), requires_grad=True)
+            self.alpha = nn.parameter.Parameter(data=torch.as_tensor(0.9), requires_grad=True)
+        elif self.training_type == "red":
+            self.gamma = 0.1
+            #self.gamma = nn.parameter.Parameter(data=torch.as_tensor(0.1), requires_grad=True)
+            #self.mu = 0.5
+            self.mu = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
+        #self.mu = 0.5
+        #self.alpha = 0.3
+
+        #self.alpha = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
+        #self.mu = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
+        self.mul_coil = config['dataset']['multi_coil']
+
         '''
         self.nn = CNNBlock()
         self.gamma = 0.5
         self.alpha = 0.5
         #self.gamma = 1.0
         #self.alpha = 1.0
+        self.gamma = 0.01
+        self.alpha = 1.0
         '''
 
     def forward(self, x, P, S, y):
+        '''
+        :param x: x: torch.Size([1, 2, 256, 232])
+        :param P:
+        :param S: S: torch.Size([1, 12, 256, 232])
+        :param y:
+        :return:
+        '''
         x = x.permute([0, 2, 3, 1]).contiguous()
 
-        with open('config.json') as File:
-            config = json.load(File)
+        '''
 
-        dc = fmult(x, S, P)  # A x
-        dc = ftran(dc - y, S, P)  # A^H (Ax - y)
+        dc = fmult(x, S, P, self.mul_coil)  # A x
+        dc = ftran(dc - y, S, P, self.mul_coil)  # A^H (Ax - y)
         x = x - self.gamma * dc  # x^+ = x - gamma * A^H (Ax - y)
 
         x = x.permute([0, 3, 1, 2]).contiguous()
@@ -705,10 +750,31 @@ class DeepUnfoldingBlock(nn.Module):
         prior = self.nn(x, P, S, y)
 
         return self.alpha * prior + (1 - self.alpha) * x
+        '''
+
+        if self.training_type == "pnp":
+            dc = fmult(x, S, P, self.mul_coil)  # A x
+            dc = ftran(dc - y, S, P, self.mul_coil)  # A^H (Ax - y)
+            x = x - self.gamma * dc  # x^+ = x - gamma * A^H (Ax - y)
+
+            x = x.permute([0, 3, 1, 2]).contiguous()
+
+            prior = self.nn(x, P, S, y)
+
+            return self.alpha * prior + (1 - self.alpha) * x
+
+        elif self.training_type == "red": # training_type == "red"
+            dc = fmult(x, S, P, self.mul_coil)  # A x
+            dc = ftran(dc - y, S, P, self.mul_coil)  # A^H (Ax - y)
+
+            dc = dc.permute([0, 3, 1, 2]).contiguous()
+            x = x.permute([0, 3, 1, 2]).contiguous()
+
+            x = x - self.gamma *(dc + self.mu *(self.nn(x, P, S, y) - x))
+
+            return x
 
 class DeepUnfolding(nn.Module):
-    name = 'DU'
-
     def __init__(self, iterations):
         super().__init__()
         self.du_block = nn.ModuleList()
@@ -723,3 +789,20 @@ class DeepUnfolding(nn.Module):
             x = self.du_block[i](x, P, S, y)
 
         return x
+    def getGamma(self):
+        result = []
+        for i in range(self.iterations):
+            result.append(self.du_block[i].gamma)
+        return result
+
+    def getAlpha(self):
+        result = []
+        for i in range(self.iterations):
+            result.append(self.du_block[i].alpha)
+        return result
+
+    def getMu(self):
+        result = []
+        for i in range(self.iterations):
+            result.append(self.du_block[i].mu)
+        return result
