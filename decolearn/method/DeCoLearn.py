@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, Subset
 from torch import nn
 import torch
 
-from torch_util.metrics import Mean, compare_psnr, compare_ssim, Stack
+from torch_util.metrics import Mean, compare_psnr, compare_ssim, Stack, compare_snr
 
 from torch_util.callback import CallbackList, BaseLogger, ModelCheckpoint, Tensorboard
 from torch.utils.data import Dataset
@@ -125,10 +125,16 @@ def train(
     valid_iter_total = int(valid_dataset.__len__() / 1)
 
     sample_indices = [10, 20, 30]
+    '''
     valid_sample_moved_x, valid_sample_moved_y_tran, valid_sensitivity_map, valid_sample_moved_y, valid_sample_moved_mask, \
         valid_sample_fixed_x, valid_sample_fixed_y_tran, valid_sample_fixed_y, valid_sample_fixed_mask \
         = (i.cuda() for i in next(iter(
             DataLoader(Subset(valid_dataset, sample_indices), batch_size=len(sample_indices)))))
+    '''
+    valid_sample_moved_x, valid_sample_moved_y_tran, valid_sensitivity_map, valid_sample_moved_y, valid_sample_moved_mask, \
+    valid_sample_fixed_x, valid_sample_fixed_y_tran, valid_sample_fixed_y, valid_sample_fixed_mask \
+        = (i.cuda() for i in next(iter(
+        DataLoader(Subset(valid_dataset, sample_indices), batch_size=1))))
 
     print(valid_sample_moved_x.shape, valid_sample_moved_y_tran.shape, valid_sample_fixed_x.shape,
           valid_sample_fixed_y_tran.shape)
@@ -386,6 +392,165 @@ def train(
 
                 fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
 
+                # added for registration visualization
+                moved_y_tran_recon = recon_module(moved_y_tran, moved_mask, sensitivity_map, moved_y)
+
+                fixed_x = torch.nn.functional.pad(
+                    torch.sqrt(torch.sum(fixed_x ** 2, dim=1, keepdim=True)), [4, 4])
+
+                moved_x = torch.nn.functional.pad(
+                    torch.sqrt(torch.sum(moved_x ** 2, dim=1, keepdim=True)), [4, 4])
+
+                fixed_y_tran_recon = torch.nn.functional.pad(
+                    torch.sqrt(torch.sum(fixed_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
+                moved_y_tran_recon = torch.nn.functional.pad(
+                    torch.sqrt(torch.sum(moved_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
+
+                print(f"\n\nYOUNGIL RESTRATION MODULE: moved_y_tran_recon: {moved_y_tran_recon.shape}")
+                print(f"YOUNGIL RESTRATION MODULE: fixed_y_tran_recon: {fixed_y_tran_recon.shape}\n\n")
+
+                wrap_m2f, flow_m2f = regis_module(moved_y_tran_recon, fixed_y_tran_recon)
+                wrap_f2m, flow_f2m = regis_module(fixed_y_tran_recon, moved_y_tran_recon)
+
+                print(f"YOUNGIL RESTRATION MODULE: flow_f2m: {flow_f2m.shape}\n\n")
+
+                # to remove the gray background
+                #fixed_y_tran_recon[fixed_x == 0] = 0
+
+                if training_type == "pnp":
+                    gammaList = recon_module.getGamma()
+                    alphaList = recon_module.getAlpha()
+                    log_batch = {
+                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'gamma0': gammaList[0].item(),
+                        'gamma1': gammaList[1].item(),
+                        'gamma2': gammaList[2].item(),
+                        'gamma3': gammaList[3].item(),
+                        'gamma4': gammaList[4].item(),
+                        'alpha0': alphaList[0].item(),
+                        'alpha1': alphaList[1].item(),
+                        'alpha2': alphaList[2].item(),
+                        'alpha3': alphaList[3].item(),
+                        'alpha4': alphaList[4].item()
+                    }
+                elif training_type == "red":
+                    # gammaList = recon_module.getGamma()
+                    muList = recon_module.getMu()
+                    log_batch = {
+                        'mu0': muList[0].item(),
+                        'mu1': muList[1].item(),
+                        'mu2': muList[2].item(),
+                        'mu3': muList[3].item(),
+                        'mu4': muList[4].item(),
+                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                        #'valid_dice_m2f': compute_dice(moved_seg_warped_m2f, fixed_seg).item(),
+                        #'valid_dice_f2m': compute_dice(fixed_seg_warped_f2m, moved_seg).item(),
+
+                        'valid_fixed_snr': compare_snr(fixed_y_tran_recon, fixed_x).item(),
+                        'valid_fixed_ssim': compare_ssim(fixed_y_tran_recon, fixed_x).item(),
+                        'valid_fixed_psnr': compare_psnr(fixed_y_tran_recon, fixed_x).item(),
+
+                        'valid_moved_snr': compare_snr(moved_y_tran_recon, moved_x).item(),
+                        'valid_moved_ssim': compare_ssim(moved_y_tran_recon, moved_x).item(),
+                        'valid_moved_psnr': compare_psnr(moved_y_tran_recon, moved_x).item(),
+
+                        'valid_wrap_snr_m2f': compare_snr(wrap_m2f, fixed_x).item(),
+                        'valid_wrap_ssim_m2f': compare_ssim(wrap_m2f, fixed_x).item(),
+                        'valid_wrap_psnr_m2f': compare_psnr(wrap_m2f, fixed_x).item(),
+
+                        'valid_wrap_snr_f2m': compare_snr(wrap_f2m, moved_x).item(),
+                        'valid_wrap_ssim_f2m': compare_ssim(wrap_f2m, moved_x).item(),
+                        'valid_wrap_psnr_f2m': compare_psnr(wrap_f2m, moved_x).item(),
+
+                    }
+                else:
+                    log_batch = {
+                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                    }
+
+                metrics.update_state(log_batch)
+
+            valid_sample_fixed_y_tran_recon = recon_module(valid_sample_fixed_y_tran, valid_sample_fixed_mask,
+                                                           sensitivity_map, valid_sample_fixed_y)
+
+            # added
+            valid_sample_moved_y_tran_recon = recon_module(valid_sample_moved_y_tran, valid_sample_moved_mask,
+                                                           sensitivity_map, valid_sample_moved_y)
+
+
+
+            valid_sample_moved_y_tran_recon = torch.nn.functional.pad(
+                torch.sqrt(torch.sum(valid_sample_moved_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
+            valid_sample_fixed_y_tran_recon = torch.nn.functional.pad(
+                torch.sqrt(torch.sum(valid_sample_fixed_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
+
+            print(f"\n\nYOUNGIL RESTRATION MODULE: vali_moved_recon: {valid_sample_moved_y_tran_recon.shape}")
+            print(f"YOUNGIL RESTRATION MODULE: vali_fixed_recon: {valid_sample_fixed_y_tran_recon.shape}\n\n")
+
+            valid_sample_wrap, valid_sample_flow = regis_module(valid_sample_moved_y_tran_recon,
+                                                                valid_sample_fixed_y_tran_recon)
+
+
+            print(f"YOUNGIL RESTRATION MODULE: vali_sample_flow: {valid_sample_flow.shape}\n\n")
+
+            valid_grids = create_standard_grid(valid_sample_flow)
+            valid_grids = valid_grids.cuda()
+
+            trf = SpatialTransformer([256, 240])
+            trf.cuda()
+
+            valid_grids = trf(valid_grids, valid_sample_flow)
+
+            valid_wrap_norm = create_grid_norm(valid_sample_flow)
+
+            trf = SpatialTransformer([256, 232])
+            trf.cuda()
+            '''
+
+            train_sample_fixed_y_tran_recon = recon_module(train_sample_fixed_y_tran)
+            train_sample_moved_y_tran_recon = recon_module(train_sample_moved_y_tran)
+
+            train_sample_wrap, train_sample_flow = regis_module(train_sample_moved_y_tran_recon,
+                                                                train_sample_fixed_y_tran_recon)
+
+            train_grids = create_standard_grid(train_sample_flow)
+            train_grids = train_grids.cuda()
+            train_grids = trf(train_grids, train_sample_flow)
+
+            train_wrap_norm = create_grid_norm(train_sample_flow)
+            '''
+
+        log_epoch = metrics.result()
+        metrics.reset_state()
+
+        image_epoch = {
+            'prediction': abs_helper(valid_sample_fixed_y_tran_recon),
+
+            'valid_sample_moved_y_tran_recon': valid_sample_moved_y_tran_recon,
+            'valid_sample_fixed_y_tran_recon': valid_sample_fixed_y_tran_recon,
+            "valid_sample_wrap": valid_sample_wrap,
+
+            "valid_grids": valid_grids,
+            "valid_wrap_norm": valid_wrap_norm,
+        }
+
+        regis_callbacks.call_epoch_end_hook(log_epoch, image_epoch, global_epoch)
+        recon_callbacks.call_epoch_end_hook(log_epoch, image_epoch, global_epoch)
+        '''
+        with torch.no_grad():
+
+            iter_ = tqdm(valid_dataloader, desc='Valid [%.3d/%.3d]' % (global_epoch, train_epoch),
+                         total=valid_iter_total)
+            for i, valid_data in enumerate(iter_):
+                moved_x, moved_y_tran, sensitivity_map, moved_y, moved_mask, fixed_x, fixed_y_tran, fixed_y, fixed_mask = \
+                    (i.cuda() for i in valid_data)
+
+                fixed_y_tran_recon = recon_module(fixed_y_tran, fixed_mask, sensitivity_map, fixed_y)
+
                 # to remove the gray background
                 fixed_y_tran_recon[fixed_x == 0] = 0
 
@@ -439,6 +604,7 @@ def train(
 
         regis_callbacks.call_epoch_end_hook(log_epoch, image_epoch, global_epoch)
         recon_callbacks.call_epoch_end_hook(log_epoch, image_epoch, global_epoch)
+        '''
 
 def test(
         load_dataset_fn,
@@ -511,3 +677,49 @@ def test(
     print("Writing results....")
     write_test(log_dict=metrics.result(), img_dict=images.result(), save_path=save_path,
                is_save_mat=config['test']['is_save_mat'])
+
+
+# Function for registration module visualization
+# -------------------------------------
+
+import os
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+import numpy as np
+import tifffile as tiff
+import torch
+from PIL import Image, ImageDraw
+from skimage.measure import find_contours
+import scipy.io as sio
+import ants
+
+def create_standard_grid(grid):
+    n_batch, _, n_width, n_height = grid.shape
+
+    img_ants = ants.from_numpy(np.zeros([n_width, n_height], dtype=np.float32))
+
+    img_array = ants.create_warped_grid(image=img_ants, foreground=0, background=1).numpy(True)
+    img_array = np.transpose(img_array, [2, 0, 1])
+
+    img_array -= np.amin(img_array)
+    img_array /= np.amax(img_array)
+
+    if n_batch > 1:
+        img_grid = torch.stack(n_batch * [torch.from_numpy(img_array)], 0)
+    else:
+        img_grid = torch.from_numpy(img_array).unsqueeze(0)
+
+    return img_grid
+
+def create_grid_norm(grid):
+    n_batch, n_dim, n_width, n_height = grid.shape
+
+    if n_dim == 2:
+        norm = torch.sqrt(grid[:, 0, :, :] ** 2 + grid[:, 1, :, :] ** 2)
+        norm = norm.unsqueeze(1)
+
+    else:
+        raise NotImplementedError("Only n_dim = 2 Supported")
+
+    return norm
