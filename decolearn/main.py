@@ -31,6 +31,7 @@ def main(gpu_index, is_optimize_regis):
 
     nf_enc = config['module']['regis']['nf_enc']
     nf_dec = config['module']['regis']['nf_dec']
+
     '''
     recon_module = EDSR(
             n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
@@ -41,41 +42,45 @@ def main(gpu_index, is_optimize_regis):
             dimension=2,
         )
     '''
-    recon_module = DeepUnfolding(8)
-    #recon_module = DeepUnfolding(9)
-    regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
 
-    method_dict = {
-        'DeCoLearn': DeCoLearn,
-    }
+    #muList = [0.75, 0.5, 0.35]
+    muList = [0.65]
 
-    load_dataset_fn = lambda baseline_method: load_synthetic_MoDL_dataset(
-            root_folder=config['dataset']['root_path'],
-            mask_type=config['dataset']['mask_type'],
-            mask_fold=config['dataset']['mask_fold'],
-            input_snr=config['dataset']['input_snr'],
-            nonlinear_P=config['dataset']['synthetic']['P'],
-            nonlinear_sigma=config['dataset']['synthetic']['sigma'],
-            nonlinear_theta=config['dataset']['synthetic']['theta'],
-            translation=config['dataset']['synthetic']['translation'],
-            rotate=config['dataset']['synthetic']['rotate'],
-            scale=config['dataset']['synthetic']['scale'],
-            mul_coil = config['dataset']['multi_coil'])
+    for i in range(len(muList)):
+        recon_module = DeepUnfolding(5, muList[i])
+        regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
+
+        method_dict = {
+            'DeCoLearn': DeCoLearn,
+        }
+
+        load_dataset_fn = lambda baseline_method: load_synthetic_MoDL_dataset(
+                root_folder=config['dataset']['root_path'],
+                mask_type=config['dataset']['mask_type'],
+                mask_fold=config['dataset']['mask_fold'],
+                input_snr=config['dataset']['input_snr'],
+                nonlinear_P=config['dataset']['synthetic']['P'],
+                nonlinear_sigma=config['dataset']['synthetic']['sigma'],
+                nonlinear_theta=config['dataset']['synthetic']['theta'],
+                translation=config['dataset']['synthetic']['translation'],
+                rotate=config['dataset']['synthetic']['rotate'],
+                scale=config['dataset']['synthetic']['scale'],
+                mul_coil = config['dataset']['multi_coil'])
 
 
-    method_dict[config['setting']['method']].train(
-                load_dataset_fn=load_dataset_fn,
-                recon_module=recon_module,
-                regis_module=regis_module,
-                config=config
-    )
+        method_dict[config['setting']['method']].train(
+                    load_dataset_fn=load_dataset_fn,
+                    recon_module=recon_module,
+                    regis_module=regis_module,
+                    config=config
+        )
 
-    method_dict[config['setting']['method']].test(
-                load_dataset_fn=load_dataset_fn,
-                recon_module=recon_module,
-                regis_module=regis_module,
-                config=config
-    )
+        method_dict[config['setting']['method']].test(
+                    load_dataset_fn=load_dataset_fn,
+                    recon_module=recon_module,
+                    regis_module=regis_module,
+                    config=config
+        )
 
 
 if __name__ == '__main__':
