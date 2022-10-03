@@ -686,7 +686,7 @@ def ftran(y, S, P, mul_coil):
 import json
 
 class DeepUnfoldingBlock(nn.Module):
-    def __init__(self):
+    def __init__(self, muValue):
         super().__init__()
         with open('config.json') as File:
             config = json.load(File)
@@ -710,8 +710,8 @@ class DeepUnfoldingBlock(nn.Module):
         elif self.training_type == "red":
             self.gamma = 0.1
             #self.gamma = nn.parameter.Parameter(data=torch.as_tensor(0.1), requires_grad=True)
-            #self.mu = 0.5
-            self.mu = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
+            self.mu = muValue
+            #self.mu = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
         #self.mu = 0.5
         #self.alpha = 0.3
 
@@ -775,12 +775,12 @@ class DeepUnfoldingBlock(nn.Module):
             return x
 
 class DeepUnfolding(nn.Module):
-    def __init__(self, iterations):
+    def __init__(self, iterations, muValue = 0.1):
         super().__init__()
         self.du_block = nn.ModuleList()
         self.iterations = iterations
         for i in range(self.iterations):
-            DUblock = DeepUnfoldingBlock()
+            DUblock = DeepUnfoldingBlock(muValue = muValue)
             self.du_block.append(DUblock)
 
     def forward(self, x, P, S, y):
