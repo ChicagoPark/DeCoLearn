@@ -167,8 +167,10 @@ def train(
 
     recon_loss_fn = loss_fn_dict[recon_loss]()
 
-    trf = SpatialTransformer([256, 232])
-    trf.cuda()
+    trf_232 = SpatialTransformer([256, 232])
+    trf_240 = SpatialTransformer([256, 240])
+    trf_232.cuda()
+    trf_240.cuda()
 
     ########################
     # Begin Training
@@ -290,7 +292,7 @@ def train(
 
                     _, flow_m2f = regis_module(moved_y_tran_recon_abs, fixed_y_tran_recon_abs)
                     flow_m2f = flow_m2f[..., 4:-4]
-                    wrap_m2f = torch.cat([trf(tmp, flow_m2f) for tmp in [
+                    wrap_m2f = torch.cat([trf_232(tmp, flow_m2f) for tmp in [
                         torch.unsqueeze(moved_y_tran_recon[:, 0], 1), torch.unsqueeze(moved_y_tran_recon[:, 1], 1)
                     ]], 1)
                     from torch_util.module import ftran, fmult
@@ -300,7 +302,7 @@ def train(
 
                     _, flow_f2m = regis_module(fixed_y_tran_recon_abs, moved_y_tran_recon_abs)
                     flow_f2m = flow_f2m[..., 4:-4]
-                    wrap_f2m = torch.cat([trf(tmp, flow_f2m) for tmp in [
+                    wrap_f2m = torch.cat([trf_232(tmp, flow_f2m) for tmp in [
                         torch.unsqueeze(fixed_y_tran_recon[:, 0], 1), torch.unsqueeze(fixed_y_tran_recon[:, 1], 1)
                     ]], 1)
 
@@ -406,13 +408,8 @@ def train(
                 moved_y_tran_recon = torch.nn.functional.pad(
                     torch.sqrt(torch.sum(moved_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
 
-                print(f"\n\nYOUNGIL RESTRATION MODULE: moved_y_tran_recon: {moved_y_tran_recon.shape}")
-                print(f"YOUNGIL RESTRATION MODULE: fixed_y_tran_recon: {fixed_y_tran_recon.shape}\n\n")
-
                 wrap_m2f, flow_m2f = regis_module(moved_y_tran_recon, fixed_y_tran_recon)
                 wrap_f2m, flow_f2m = regis_module(fixed_y_tran_recon, moved_y_tran_recon)
-
-                print(f"YOUNGIL RESTRATION MODULE: flow_f2m: {flow_f2m.shape}\n\n")
 
                 # to remove the gray background
                 #fixed_y_tran_recon[fixed_x == 0] = 0
@@ -438,11 +435,11 @@ def train(
                     # gammaList = recon_module.getGamma()
                     muList = recon_module.getMu()
                     log_batch = {
-                        'mu0': muList[0].item(),
-                        'mu1': muList[1].item(),
-                        'mu2': muList[2].item(),
-                        'mu3': muList[3].item(),
-                        'mu4': muList[4].item(),
+                        'mu': muList[0],
+                        #'mu1': muList[1].item(),
+                        #'mu2': muList[2].item(),
+                        #'mu3': muList[3].item(),
+                        #'mu4': muList[4].item(),
                         'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
                         'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
 
@@ -488,27 +485,20 @@ def train(
             valid_sample_fixed_y_tran_recon = torch.nn.functional.pad(
                 torch.sqrt(torch.sum(valid_sample_fixed_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
 
-            print(f"\n\nYOUNGIL RESTRATION MODULE: vali_moved_recon: {valid_sample_moved_y_tran_recon.shape}")
-            print(f"YOUNGIL RESTRATION MODULE: vali_fixed_recon: {valid_sample_fixed_y_tran_recon.shape}\n\n")
 
             valid_sample_wrap, valid_sample_flow = regis_module(valid_sample_moved_y_tran_recon,
                                                                 valid_sample_fixed_y_tran_recon)
 
 
-            print(f"YOUNGIL RESTRATION MODULE: vali_sample_flow: {valid_sample_flow.shape}\n\n")
 
             valid_grids = create_standard_grid(valid_sample_flow)
             valid_grids = valid_grids.cuda()
 
-            trf = SpatialTransformer([256, 240])
-            trf.cuda()
 
-            valid_grids = trf(valid_grids, valid_sample_flow)
+            valid_grids = trf_240(valid_grids, valid_sample_flow)
 
             valid_wrap_norm = create_grid_norm(valid_sample_flow)
 
-            trf = SpatialTransformer([256, 232])
-            trf.cuda()
             '''
 
             train_sample_fixed_y_tran_recon = recon_module(train_sample_fixed_y_tran)
@@ -665,7 +655,7 @@ def test(
             metrics.update_state(log_batch)
             images.update_state(images_batch)
 
-    save_path = file_path + '/test_' + datetime.datetime.now().strftime("%m%d%H%M") + \
+    save_path = file_path + 'test_' + datetime.datetime.now().strftime("%m%d%H%M") + \
         '_' + config['setting']['save_folder'] + \
         '_' + config['test']['recon_checkpoint'].replace('/', '_') + '/'
 
