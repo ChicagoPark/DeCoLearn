@@ -442,10 +442,7 @@ def train(
                         #'mu4': muList[4].item(),
                         'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
                         'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-
-                        #'valid_dice_m2f': compute_dice(moved_seg_warped_m2f, fixed_seg).item(),
-                        #'valid_dice_f2m': compute_dice(fixed_seg_warped_f2m, moved_seg).item(),
-
+                        '''
                         'valid_fixed_snr': compare_snr(fixed_y_tran_recon, fixed_x).item(),
                         'valid_fixed_ssim': compare_ssim(fixed_y_tran_recon, fixed_x).item(),
                         'valid_fixed_psnr': compare_psnr(fixed_y_tran_recon, fixed_x).item(),
@@ -461,6 +458,23 @@ def train(
                         'valid_wrap_snr_f2m': compare_snr(wrap_f2m, moved_x).item(),
                         'valid_wrap_ssim_f2m': compare_ssim(wrap_f2m, moved_x).item(),
                         'valid_wrap_psnr_f2m': compare_psnr(wrap_f2m, moved_x).item(),
+                        '''
+
+                        'valid_fixed_snr': compare_snr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_fixed_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                        'valid_fixed_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                        'valid_moved_snr': compare_snr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                        'valid_moved_ssim': compare_ssim(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                        'valid_moved_psnr': compare_psnr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+
+                        'valid_wrap_snr_m2f': compare_snr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                        'valid_wrap_ssim_m2f': compare_ssim(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                        'valid_wrap_psnr_m2f': compare_psnr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+
+                        'valid_wrap_snr_f2m': compare_snr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                        'valid_wrap_ssim_f2m': compare_ssim(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                        'valid_wrap_psnr_f2m': compare_psnr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
 
                     }
                 else:
