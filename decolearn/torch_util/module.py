@@ -686,7 +686,7 @@ def ftran(y, S, P, mul_coil):
 import json
 
 class DeepUnfoldingBlock(nn.Module):
-    def __init__(self, muValue):
+    def __init__(self, muValue, gammaValue, alphaValue):
         super().__init__()
         with open('config.json') as File:
             config = json.load(File)
@@ -700,23 +700,36 @@ class DeepUnfoldingBlock(nn.Module):
         with open('config.json') as File:
             config = json.load(File)
 
-        self.training_type = config["train"]["training_type"]
+        self.recon_module_type = config['module']['recon']['recon_module_type']
+        self.is_trainable_mu = config['module']['recon']['is_trainable_mu']
+        self.is_trainable_gamma = config['module']['recon']['is_trainable_gamma']
+        self.is_trainable_alpha = config['module']['recon']['is_trainable_alpha']
+        
         #self.gamma = nn.parameter.Parameter(data=torch.FloatTensor(0.5), requires_grad=True)
         #self.alpha = nn.parameter.Parameter(data=torch.FloatTensor(0.5), requires_grad=True)
         #self.mu = nn.parameter.Parameter(data=torch.FloatTensor(0.5), requires_grad=True)
-        if self.training_type == "pnp":
-            self.gamma = nn.parameter.Parameter(data=torch.as_tensor(0.1), requires_grad=True)
-            self.alpha = nn.parameter.Parameter(data=torch.as_tensor(0.9), requires_grad=True)
-        elif self.training_type == "red":
-            self.gamma = 0.1
-            #self.gamma = nn.parameter.Parameter(data=torch.as_tensor(0.1), requires_grad=True)
-            self.mu = muValue
-            #self.mu = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
-        #self.mu = 0.5
-        #self.alpha = 0.3
+        if self.recon_module_type == "pnp":
+            if self.is_trainable_alpha == True:
+                self.alpha = nn.parameter.Parameter(data=torch.as_tensor(alphaValue), requires_grad=True)
+            else:
+                self.alpha = alphaValue
 
-        #self.alpha = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
-        #self.mu = nn.parameter.Parameter(data=torch.as_tensor(0.5), requires_grad=True)
+            if self.is_trainable_gamma == True:
+                self.gamma = nn.parameter.Parameter(data=torch.as_tensor(gammaValue), requires_grad=True)
+            else:
+                self.gamma = gammaValue
+                
+        elif self.recon_module_type == "red":
+            if self.is_trainable_mu == True:
+                self.mu = nn.parameter.Parameter(data=torch.as_tensor(muValue), requires_grad=True)
+            else:
+                self.mu = muValue
+
+            if self.is_trainable_gamma == True:
+                self.gamma = nn.parameter.Parameter(data=torch.as_tensor(gammaValue), requires_grad=True)
+            else:
+                self.gamma = gammaValue
+            
         self.mul_coil = config['dataset']['multi_coil']
 
         '''
@@ -740,7 +753,6 @@ class DeepUnfoldingBlock(nn.Module):
         x = x.permute([0, 2, 3, 1]).contiguous()
 
         '''
-
         dc = fmult(x, S, P, self.mul_coil)  # A x
         dc = ftran(dc - y, S, P, self.mul_coil)  # A^H (Ax - y)
         x = x - self.gamma * dc  # x^+ = x - gamma * A^H (Ax - y)
@@ -752,7 +764,7 @@ class DeepUnfoldingBlock(nn.Module):
         return self.alpha * prior + (1 - self.alpha) * x
         '''
 
-        if self.training_type == "pnp":
+        if self.recon_module_type == "pnp":
             dc = fmult(x, S, P, self.mul_coil)  # A x
             dc = ftran(dc - y, S, P, self.mul_coil)  # A^H (Ax - y)
             x = x - self.gamma * dc  # x^+ = x - gamma * A^H (Ax - y)
@@ -763,7 +775,7 @@ class DeepUnfoldingBlock(nn.Module):
 
             return self.alpha * prior + (1 - self.alpha) * x
 
-        elif self.training_type == "red": # training_type == "red"
+        elif self.recon_module_type == "red": # training_type == "red"
             dc = fmult(x, S, P, self.mul_coil)  # A x
             dc = ftran(dc - y, S, P, self.mul_coil)  # A^H (Ax - y)
 
@@ -775,12 +787,12 @@ class DeepUnfoldingBlock(nn.Module):
             return x
 
 class DeepUnfolding(nn.Module):
-    def __init__(self, iterations, muValue = 0.1):
+    def __init__(self, iterations, muValue, gammaValue, alphaValue):
         super().__init__()
         self.du_block = nn.ModuleList()
         self.iterations = iterations
         for i in range(self.iterations):
-            DUblock = DeepUnfoldingBlock(muValue = muValue)
+            DUblock = DeepUnfoldingBlock(muValue = muValue, gammaValue= gammaValue, alphaValue= alphaValue)
             self.du_block.append(DUblock)
 
     def forward(self, x, P, S, y):
