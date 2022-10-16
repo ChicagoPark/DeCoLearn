@@ -31,28 +31,25 @@ def main(gpu_index, is_optimize_regis):
 
     nf_enc = config['module']['regis']['nf_enc']
     nf_dec = config['module']['regis']['nf_dec']
-
-    '''
-    recon_module = EDSR(
-            n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
-            n_feats=config['module']['recon']['EDSR']['n_feats'],
-            res_scale=config['module']['recon']['EDSR']['res_scale'],
-            in_channels=2,
-            out_channels=2,
-            dimension=2,
-        )
-    '''
-
+    iteration_k = config['module']['recon']['iteration_k']
     #muList = [0.75, 0.5, 0.35]
-    muList = [0.65]
+    mu_list = config['module']['recon']['mu_list']       # for RED
+    gamma_list = config['module']['recon']['gamma_list'] # for pnp and RED
+    alpha_list = config['module']['recon']['alpha_list'] # for pnp
+    recon_module_type = config['module']['recon']['recon_module_type']
 
-    for i in range(len(muList)):
-        recon_module = DeepUnfolding(5, muList[i])
-        regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
-
+    if recon_module_type == "decolearn":
+        recon_module = EDSR(
+                n_resblocks=config['module']['recon']['EDSR']['n_resblocks'],
+                n_feats=config['module']['recon']['EDSR']['n_feats'],
+                res_scale=config['module']['recon']['EDSR']['res_scale'],
+                in_channels=2,
+                out_channels=2,
+                dimension=2,
+            )
         method_dict = {
-            'DeCoLearn': DeCoLearn,
-        }
+                        'DeCoLearn': DeCoLearn,
+                    }
 
         load_dataset_fn = lambda baseline_method: load_synthetic_MoDL_dataset(
                 root_folder=config['dataset']['root_path'],
@@ -81,6 +78,44 @@ def main(gpu_index, is_optimize_regis):
                     regis_module=regis_module,
                     config=config
         )
+    else:
+        for i in range(len(mu_list)):
+            for j in range(len(gamma_list)):
+                for k in range(len(alpha_list)):
+                    recon_module = DeepUnfolding(iteration_k, mu_list[i], gamma_list[j], alpha_list[k])
+                    regis_module = voxelmorph([256, 240], nf_enc, nf_dec)
+
+                    method_dict = {
+                        'DeCoLearn': DeCoLearn,
+                    }
+
+                    load_dataset_fn = lambda baseline_method: load_synthetic_MoDL_dataset(
+                            root_folder=config['dataset']['root_path'],
+                            mask_type=config['dataset']['mask_type'],
+                            mask_fold=config['dataset']['mask_fold'],
+                            input_snr=config['dataset']['input_snr'],
+                            nonlinear_P=config['dataset']['synthetic']['P'],
+                            nonlinear_sigma=config['dataset']['synthetic']['sigma'],
+                            nonlinear_theta=config['dataset']['synthetic']['theta'],
+                            translation=config['dataset']['synthetic']['translation'],
+                            rotate=config['dataset']['synthetic']['rotate'],
+                            scale=config['dataset']['synthetic']['scale'],
+                            mul_coil = config['dataset']['multi_coil'])
+
+
+                    method_dict[config['setting']['method']].train(
+                                load_dataset_fn=load_dataset_fn,
+                                recon_module=recon_module,
+                                regis_module=regis_module,
+                                config=config
+                    )
+
+                    method_dict[config['setting']['method']].test(
+                                load_dataset_fn=load_dataset_fn,
+                                recon_module=recon_module,
+                                regis_module=regis_module,
+                                config=config
+                    )
 
 
 if __name__ == '__main__':
