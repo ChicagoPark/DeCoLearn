@@ -91,7 +91,9 @@ def train(
 
     is_optimize_regis = config['method']['proposed']['is_optimize_regis']
     mul_coil = config['dataset']['multi_coil']
-    training_type = config["train"]["training_type"]
+    recon_module_type = config['module']['recon']['recon_module_type']
+    recon_module_type = config['module']['recon']['recon_module_type']
+    is_trainable_gamma = config['module']['recon']['is_trainable_gamma']
 
     lambda_ = config['method']['lambda_']
     loss_regis_mse_COEFF = config['method']['loss_regis_mse']
@@ -297,8 +299,8 @@ def train(
                     ]], 1)
                     from torch_util.module import ftran, fmult
                     #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous())))
-                    #wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil)
-                    wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous()))))
+                    wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil)
+                    #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(wrap_m2f.permute([0, 2, 3, 1]).contiguous()))))
 
                     _, flow_f2m = regis_module(fixed_y_tran_recon_abs, moved_y_tran_recon_abs)
                     flow_f2m = flow_f2m[..., 4:-4]
@@ -307,17 +309,17 @@ def train(
                     ]], 1)
 
                     #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous())))
-                    #wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil)
-                    wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous()))))
+                    wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil)
+                    #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(wrap_f2m.permute([0, 2, 3, 1]).contiguous()))))
 
                 else:
                     from torch_util.module import ftran, fmult
-                    #wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil)
-                    #wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil)
+                    wrap_y_m2f = fmult(wrap_m2f.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil)
+                    wrap_y_f2m = fmult(wrap_f2m.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, moved_mask, mul_coil)
                     #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
                     #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))
-                    wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))))
-                    wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))))
+                    #wrap_y_m2f = fixed_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))))
+                    #wrap_y_f2m = moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))))
 
                 recon_loss_m2f = recon_loss_fn(wrap_y_m2f, fixed_y)
                 recon_loss_f2m = recon_loss_fn(wrap_y_f2m, moved_y)
@@ -328,7 +330,6 @@ def train(
                     fixed_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))), fixed_y)
                 recon_loss_consensus_moved = recon_loss_fn(
                     moved_mask * torch.view_as_real(torch.fft.fft2(torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous()))), moved_y)
-                '''
                 '''
                 recon_loss_consensus_fixed = recon_loss_fn(
                     fmult(fixed_y_tran_recon.permute([0, 2, 3, 1]).contiguous(), sensitivity_map, fixed_mask, mul_coil),
@@ -343,6 +344,7 @@ def train(
                 recon_loss_consensus_moved = recon_loss_fn(
                     moved_mask * torch.view_as_real(torch.fft.fft2(sensitivity_map * (
                         torch.view_as_complex(moved_y_tran_recon.permute([0, 2, 3, 1]).contiguous())))), moved_y)
+                '''
 
                 if loss_recon_consensus_COEFF > 0:
                     recon_loss += loss_recon_consensus_COEFF * (recon_loss_consensus_fixed + recon_loss_consensus_moved)
@@ -414,69 +416,141 @@ def train(
                 # to remove the gray background
                 #fixed_y_tran_recon[fixed_x == 0] = 0
 
-                if training_type == "pnp":
+                if recon_module_type == "pnp":
                     gammaList = recon_module.getGamma()
                     alphaList = recon_module.getAlpha()
-                    log_batch = {
-                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-                        'gamma0': gammaList[0].item(),
-                        'gamma1': gammaList[1].item(),
-                        'gamma2': gammaList[2].item(),
-                        'gamma3': gammaList[3].item(),
-                        'gamma4': gammaList[4].item(),
-                        'alpha0': alphaList[0].item(),
-                        'alpha1': alphaList[1].item(),
-                        'alpha2': alphaList[2].item(),
-                        'alpha3': alphaList[3].item(),
-                        'alpha4': alphaList[4].item()
-                    }
-                elif training_type == "red":
-                    # gammaList = recon_module.getGamma()
+                    if is_trainable_gamma == True:
+                        log_batch = {
+                            'gamma0': gammaList[0].item(),
+                            'gamma1': gammaList[1].item(),
+                            'gamma2': gammaList[2].item(),
+                            'gamma3': gammaList[3].item(),
+                            #'gamma4': gammaList[4].item(),
+                            'alpha0': alphaList[0].item(),
+                            'alpha1': alphaList[1].item(),
+                            'alpha2': alphaList[2].item(),
+                            'alpha3': alphaList[3].item(),
+                            #'alpha4': alphaList[4].item(),
+                            'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                            'valid_fixed_snr': compare_snr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                            'valid_moved_snr': compare_snr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_ssim': compare_ssim(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_psnr': compare_psnr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+
+                            'valid_wrap_snr_m2f': compare_snr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_ssim_m2f': compare_ssim(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_psnr_m2f': compare_psnr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+
+                            'valid_wrap_snr_f2m': compare_snr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_ssim_f2m': compare_ssim(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_psnr_f2m': compare_psnr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                        }
+                    else: # any parameter is not trainable
+                        log_batch = {
+                            'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'gamma': gammaList[0],
+                            'alpha': alphaList[0],
+                            'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                            'valid_fixed_snr': compare_snr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                            'valid_moved_snr': compare_snr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_ssim': compare_ssim(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_psnr': compare_psnr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+
+                            'valid_wrap_snr_m2f': compare_snr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_ssim_m2f': compare_ssim(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_psnr_m2f': compare_psnr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+
+                            'valid_wrap_snr_f2m': compare_snr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_ssim_f2m': compare_ssim(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_psnr_f2m': compare_psnr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                        }
+
+                elif recon_module_type== "red":
+                    gammaList = recon_module.getGamma()
                     muList = recon_module.getMu()
-                    log_batch = {
-                        'mu': muList[0],
-                        #'mu1': muList[1].item(),
-                        #'mu2': muList[2].item(),
-                        #'mu3': muList[3].item(),
-                        #'mu4': muList[4].item(),
-                        'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-                        'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                    if is_trainable_gamma == True:
+                        log_batch = {
+                            'gamma0': gammaList[0].item(),
+                            'gamma1': gammaList[1].item(),
+                            'gamma2': gammaList[2].item(),
+                            'gamma3': gammaList[3].item(),
+                            #'gamma4': gammaList[4].item(),
+                            'mu0': muList[0].item(),
+                            'mu1': muList[1].item(),
+                            'mu2': muList[2].item(),
+                            'mu3': muList[3].item(),
+                            #'mu4': muList[4].item(),
+                            'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                            'valid_fixed_snr': compare_snr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+
+                            'valid_moved_snr': compare_snr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_ssim': compare_ssim(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_psnr': compare_psnr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+
+                            'valid_wrap_snr_m2f': compare_snr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_ssim_m2f': compare_ssim(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_psnr_m2f': compare_psnr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+
+                            'valid_wrap_snr_f2m': compare_snr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_ssim_f2m': compare_ssim(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_psnr_f2m': compare_psnr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                        }
                         '''
-                        'valid_fixed_snr': compare_snr(fixed_y_tran_recon, fixed_x).item(),
-                        'valid_fixed_ssim': compare_ssim(fixed_y_tran_recon, fixed_x).item(),
-                        'valid_fixed_psnr': compare_psnr(fixed_y_tran_recon, fixed_x).item(),
+                            'valid_fixed_snr': compare_snr(fixed_y_tran_recon, fixed_x).item(),
+                            'valid_fixed_ssim': compare_ssim(fixed_y_tran_recon, fixed_x).item(),
+                            'valid_fixed_psnr': compare_psnr(fixed_y_tran_recon, fixed_x).item(),
 
-                        'valid_moved_snr': compare_snr(moved_y_tran_recon, moved_x).item(),
-                        'valid_moved_ssim': compare_ssim(moved_y_tran_recon, moved_x).item(),
-                        'valid_moved_psnr': compare_psnr(moved_y_tran_recon, moved_x).item(),
+                            'valid_moved_snr': compare_snr(moved_y_tran_recon, moved_x).item(),
+                            'valid_moved_ssim': compare_ssim(moved_y_tran_recon, moved_x).item(),
+                            'valid_moved_psnr': compare_psnr(moved_y_tran_recon, moved_x).item(),
 
-                        'valid_wrap_snr_m2f': compare_snr(wrap_m2f, fixed_x).item(),
-                        'valid_wrap_ssim_m2f': compare_ssim(wrap_m2f, fixed_x).item(),
-                        'valid_wrap_psnr_m2f': compare_psnr(wrap_m2f, fixed_x).item(),
+                            'valid_wrap_snr_m2f': compare_snr(wrap_m2f, fixed_x).item(),
+                            'valid_wrap_ssim_m2f': compare_ssim(wrap_m2f, fixed_x).item(),
+                            'valid_wrap_psnr_m2f': compare_psnr(wrap_m2f, fixed_x).item(),
 
-                        'valid_wrap_snr_f2m': compare_snr(wrap_f2m, moved_x).item(),
-                        'valid_wrap_ssim_f2m': compare_ssim(wrap_f2m, moved_x).item(),
-                        'valid_wrap_psnr_f2m': compare_psnr(wrap_f2m, moved_x).item(),
-                        '''
+                            'valid_wrap_snr_f2m': compare_snr(wrap_f2m, moved_x).item(),
+                            'valid_wrap_ssim_f2m': compare_ssim(wrap_f2m, moved_x).item(),
+                            'valid_wrap_psnr_f2m': compare_psnr(wrap_f2m, moved_x).item(),
+                            '''
+                    else: # any parameter is not trainable
+                        log_batch = {
+                            'gamma': gammaList[0],
+                            'mu': muList[0],
+                            'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
 
-                        'valid_fixed_snr': compare_snr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-                        'valid_fixed_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
-                        'valid_fixed_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_snr': compare_snr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
+                            'valid_fixed_psnr': compare_psnr(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
 
-                        'valid_moved_snr': compare_snr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
-                        'valid_moved_ssim': compare_ssim(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
-                        'valid_moved_psnr': compare_psnr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_snr': compare_snr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_ssim': compare_ssim(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
+                            'valid_moved_psnr': compare_psnr(abs_helper(moved_y_tran_recon), abs_helper(moved_x)).item(),
 
-                        'valid_wrap_snr_m2f': compare_snr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
-                        'valid_wrap_ssim_m2f': compare_ssim(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
-                        'valid_wrap_psnr_m2f': compare_psnr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_snr_m2f': compare_snr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_ssim_m2f': compare_ssim(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
+                            'valid_wrap_psnr_m2f': compare_psnr(abs_helper(wrap_m2f), abs_helper(fixed_x)).item(),
 
-                        'valid_wrap_snr_f2m': compare_snr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
-                        'valid_wrap_ssim_f2m': compare_ssim(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
-                        'valid_wrap_psnr_f2m': compare_psnr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_snr_f2m': compare_snr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_ssim_f2m': compare_ssim(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                            'valid_wrap_psnr_f2m': compare_psnr(abs_helper(wrap_f2m), abs_helper(moved_x)).item(),
+                        }
 
-                    }
                 else:
                     log_batch = {
                         'valid_ssim': compare_ssim(abs_helper(fixed_y_tran_recon), abs_helper(fixed_x)).item(),
@@ -492,18 +566,13 @@ def train(
             valid_sample_moved_y_tran_recon = recon_module(valid_sample_moved_y_tran, valid_sample_moved_mask,
                                                            sensitivity_map, valid_sample_moved_y)
 
-
-
             valid_sample_moved_y_tran_recon = torch.nn.functional.pad(
                 torch.sqrt(torch.sum(valid_sample_moved_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
             valid_sample_fixed_y_tran_recon = torch.nn.functional.pad(
                 torch.sqrt(torch.sum(valid_sample_fixed_y_tran_recon ** 2, dim=1, keepdim=True)), [4, 4])
 
-
             valid_sample_wrap, valid_sample_flow = regis_module(valid_sample_moved_y_tran_recon,
                                                                 valid_sample_fixed_y_tran_recon)
-
-
 
             valid_grids = create_standard_grid(valid_sample_flow)
             valid_grids = valid_grids.cuda()
@@ -534,8 +603,8 @@ def train(
         image_epoch = {
             'prediction': abs_helper(valid_sample_fixed_y_tran_recon),
 
-            'valid_sample_moved_y_tran_recon': valid_sample_moved_y_tran_recon,
-            'valid_sample_fixed_y_tran_recon': valid_sample_fixed_y_tran_recon,
+            'valid_sample_moved_y_tran_recon': abs_helper(valid_sample_moved_y_tran_recon),
+            'valid_sample_fixed_y_tran_recon': abs_helper(valid_sample_fixed_y_tran_recon),
             "valid_sample_wrap": valid_sample_wrap,
 
             "valid_grids": valid_grids,
