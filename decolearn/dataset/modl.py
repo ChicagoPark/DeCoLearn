@@ -15,33 +15,28 @@ def generate_affine_grid(imgSize, translation=(0, 0), reflection=(1, 1), scale=1
     T_translation = np.array([
         [1, 0, translation[0]],
         [0, 1, translation[1]],
-        [0, 0, 1]
-    ]).astype(np.float32)
+        [0, 0, 1]], dtype = np.float32)
 
     T_reflection = np.array([
         [reflection[0], 0, 0],
         [0, reflection[1], 0],
-        [0, 0, 1]
-    ]).astype(np.float32)
+        [0, 0, 1]], dtype = np.float32)
 
     T_scale = np.array([
         [scale, 0, 0],
         [0, scale, 0],
-        [0, 0, 1]
-    ]).astype(np.float32)
+        [0, 0, 1]], dtype = np.float32)
 
     rotate = rotate / 180 * np.pi
     T_rotate = np.array([
         [np.cos(rotate), -np.sin(rotate), 0],
         [np.sin(rotate), np.cos(rotate),  0],
-        [0, 0, 1]
-    ]).astype(np.float32)
+        [0, 0, 1]], dtype = np.float32)
 
     T_shear = np.array([
         [1, shear[0], 0],
         [shear[1], 1, 0],
-        [0, 0, 1]
-    ]).astype(np.float32)
+        [0, 0, 1]], dtype = np.float32)
 
     rec = np.matmul(np.matmul(np.matmul(np.matmul(T_translation, T_reflection), T_scale), T_rotate), T_shear)
     rec = rec[:2, :]
@@ -85,12 +80,8 @@ def generate_nonlinear_grid(imgSize, P, theta, sigma, mask):
     return grid
 
 def fmult(ipt, type_, fold, noise_snr, sensitivity_map, mul_coil, pre_generated_mask=None, pre_generate_noise=None):
-    if len(ipt.shape) == 3:
-        comp, num_width, num_height = ipt.shape
-        ipt = ipt.permute([1, 2, 0]).contiguous()
-    else:
-        print("\nHehehehr\nhe")
-        _ , num_width, num_height, _ = ipt.shape
+    comp, num_width, num_height = ipt.shape
+    ipt = ipt.permute([1, 2, 0]).contiguous()
 
     ipt = torch.view_as_complex(ipt)
 
@@ -311,14 +302,16 @@ def load_synthetic_MoDL_dataset(
 
                 num_shape = fixed_x.shape[0]
                 fixed_y, fixed_mask, fixed_y_tran, moved_y, moved_mask, moved_y_tran, moved_y_warped_truth, moved_y_tran_warped_truth = [], [], [], [], [], [], [], []
+                mul_fixed_y, mul_fixed_mask, mul_fixed_y_tran, mul_moved_y, mul_moved_mask, mul_moved_y_tran, mul_moved_y_warped_truth, mul_moved_y_tran_warped_truth = [], [], [], [], [], [], [], []
                 for i_shape in tqdm(range(num_shape)):
-                    fixed_y_cur, fixed_mask_cur, fixed_noise_cur = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil = mul_coil, noise_snr=input_snr)
-                    moved_y_cur, moved_mask_cur, moved_noise_cur = fmult(moved_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil= mul_coil, noise_snr=input_snr)
-                    moved_y_warped_truth_cur, moved_mask_warped_truth_cur, _ = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map=sensitivity_map[i_shape], mul_coil = mul_coil, noise_snr=input_snr, pre_generate_noise=moved_noise_cur, pre_generated_mask=moved_mask_cur)
+                    # Single Coil
+                    fixed_y_cur, fixed_mask_cur, fixed_noise_cur = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil = False, noise_snr=input_snr)
+                    moved_y_cur, moved_mask_cur, moved_noise_cur = fmult(moved_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil= False, noise_snr=input_snr)
+                    moved_y_warped_truth_cur, moved_mask_warped_truth_cur, _ = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map=sensitivity_map[i_shape], mul_coil = False, noise_snr=input_snr, pre_generate_noise=moved_noise_cur, pre_generated_mask=moved_mask_cur)
 
-                    fixed_y_tran_cur = ftran(fixed_y_cur, sensitivity_map[i_shape], fixed_mask_cur, mul_coil=mul_coil)
-                    moved_y_tran_cur = ftran(moved_y_cur, sensitivity_map[i_shape], moved_mask_cur, mul_coil=mul_coil)
-                    moved_y_tran_warped_truth_cur = ftran(moved_y_warped_truth_cur, sensitivity_map[i_shape], moved_mask_warped_truth_cur, mul_coil=mul_coil)
+                    fixed_y_tran_cur = ftran(fixed_y_cur, sensitivity_map[i_shape], fixed_mask_cur, mul_coil=False)
+                    moved_y_tran_cur = ftran(moved_y_cur, sensitivity_map[i_shape], moved_mask_cur, mul_coil=False)
+                    moved_y_tran_warped_truth_cur = ftran(moved_y_warped_truth_cur, sensitivity_map[i_shape], moved_mask_warped_truth_cur, mul_coil=False)
 
                     fixed_y.append(fixed_y_cur)
                     fixed_mask.append(fixed_mask_cur)
@@ -331,9 +324,46 @@ def load_synthetic_MoDL_dataset(
                     moved_y_warped_truth.append(moved_y_warped_truth_cur)
                     moved_y_tran_warped_truth.append(moved_y_tran_warped_truth_cur)
 
+                    # Multi Coil
+                    mul_fixed_y_cur, mul_fixed_mask_cur, mul_fixed_noise_cur = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil = True, noise_snr=input_snr)
+                    mul_moved_y_cur, mul_moved_mask_cur, mul_moved_noise_cur = fmult(moved_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map = sensitivity_map[i_shape], mul_coil= True, noise_snr=input_snr)
+                    mul_moved_y_warped_truth_cur, mul_moved_mask_warped_truth_cur, _ = fmult(fixed_x[i_shape], type_=mask_type, fold=mask_fold, sensitivity_map=sensitivity_map[i_shape], mul_coil = True, noise_snr=input_snr, pre_generate_noise=mul_moved_noise_cur, pre_generated_mask=mul_moved_mask_cur)
+
+                    mul_fixed_y_tran_cur = ftran(mul_fixed_y_cur, sensitivity_map[i_shape], mul_fixed_mask_cur, mul_coil=True)
+                    mul_moved_y_tran_cur = ftran(mul_moved_y_cur, sensitivity_map[i_shape], mul_moved_mask_cur, mul_coil=True)
+                    mul_moved_y_tran_warped_truth_cur = ftran(mul_moved_y_warped_truth_cur, sensitivity_map[i_shape], mul_moved_mask_warped_truth_cur, mul_coil=True)
+
+                    mul_fixed_y.append(mul_fixed_y_cur)
+                    mul_fixed_mask.append(mul_fixed_mask_cur)
+                    mul_fixed_y_tran.append(mul_fixed_y_tran_cur)
+
+                    mul_moved_y.append(mul_moved_y_cur)
+                    mul_moved_mask.append(mul_moved_mask_cur)
+                    mul_moved_y_tran.append(mul_moved_y_tran_cur)
+
+                    mul_moved_y_warped_truth.append(mul_moved_y_warped_truth_cur)
+                    mul_moved_y_tran_warped_truth.append(mul_moved_y_tran_warped_truth_cur)
+
+                    '''
+                    [modl.py][fixed_y_cur.shape]: torch.Size([256, 232, 2])
+                    [modl.py][fixed_mask_cur.shape]:  torch.Size([256, 232, 2])
+                    [modl.py][fixed_noise_cur.shape]: torch.Size([256, 232, 2])
+                    [modl.py][mul_fixed_y_cur.shape]:  torch.Size([12, 256, 232, 2])
+                    [modl.py][mul_fixed_mask_cur.shape]: torch.Size([256, 232, 2])
+                    [modl.py][mul_fixed_noise_cur.shape]:  torch.Size([12, 256, 232, 2])
+                    [modl.py][fixed_y_cur.shape]: torch.Size([256, 232, 2])
+                    [modl.py][fixed_mask_cur.shape]:  torch.Size([256, 232, 2])
+                    [modl.py][fixed_noise_cur.shape]: torch.Size([256, 232, 2])
+                    [modl.py][mul_fixed_y_cur.shape]:  torch.Size([12, 256, 232, 2])
+                    [modl.py][mul_fixed_mask_cur.shape]: torch.Size([256, 232, 2])
+                    [modl.py][mul_fixed_noise_cur.shape]:  torch.Size([12, 256, 232, 2])
+                    '''
 
                 fixed_y, fixed_mask, fixed_y_tran, moved_y, moved_mask, moved_y_tran, moved_y_warped_truth, moved_y_tran_warped_truth = [
                     torch.stack(i, 0) for i in [fixed_y, fixed_mask, fixed_y_tran, moved_y, moved_mask, moved_y_tran, moved_y_warped_truth, moved_y_tran_warped_truth]]
+
+                mul_fixed_y, mul_fixed_mask, mul_fixed_y_tran, mul_moved_y, mul_moved_mask, mul_moved_y_tran, mul_moved_y_warped_truth, mul_moved_y_tran_warped_truth = [
+                    torch.stack(i, 0) for i in [mul_fixed_y, mul_fixed_mask, mul_fixed_y_tran, mul_moved_y, mul_moved_mask, mul_moved_y_tran, mul_moved_y_warped_truth, mul_moved_y_tran_warped_truth]]
 
                 with h5py.File(mri_h5_path, 'w') as mri_h5:
                     mri_h5.create_dataset(name='fixed_y', data=fixed_y)
@@ -345,6 +375,15 @@ def load_synthetic_MoDL_dataset(
                     mri_h5.create_dataset(name='moved_y_warped_truth', data=moved_y_warped_truth)
                     mri_h5.create_dataset(name='moved_y_tran_warped_truth', data=moved_y_tran_warped_truth)
 
+                    mri_h5.create_dataset(name='mul_fixed_y', data=mul_fixed_y)
+                    mri_h5.create_dataset(name='mul_fixed_mask', data=mul_fixed_mask)
+                    mri_h5.create_dataset(name='mul_fixed_y_tran', data=mul_fixed_y_tran)
+                    mri_h5.create_dataset(name='mul_moved_y', data=mul_moved_y)
+                    mri_h5.create_dataset(name='mul_moved_mask', data=mul_moved_mask)
+                    mri_h5.create_dataset(name='mul_moved_y_tran', data=mul_moved_y_tran)
+                    mri_h5.create_dataset(name='mul_moved_y_warped_truth', data=mul_moved_y_warped_truth)
+                    mri_h5.create_dataset(name='mul_moved_y_tran_warped_truth', data=mul_moved_y_tran_warped_truth)
+                '''
                 if mul_coil is True:
                     #to_tiff(torch.sqrt(fixed_y[..., 0] ** 2 + fixed_y[..., 1] ** 2), path=mri_qc + 'fixed_y.tiff', is_normalized=False)
                     to_tiff(torch.sqrt(fixed_mask[..., 0] ** 2 + fixed_mask[..., 1] ** 2), path=mri_qc + 'fixed_mask.tiff', is_normalized=False)
@@ -354,16 +393,24 @@ def load_synthetic_MoDL_dataset(
                     to_tiff(torch.sqrt(moved_y_tran[..., 0] ** 2 + moved_y_tran[..., 1] ** 2), path=mri_qc + 'moved_y_tran.tiff', is_normalized=False)
                     #to_tiff(torch.sqrt(moved_y_warped_truth[..., 0] ** 2 + moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_warped_truth.tiff', is_normalized=False)
                     to_tiff(torch.sqrt(moved_y_tran_warped_truth[..., 0] ** 2 + moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_tran_warped_truth.tiff', is_normalized=False)
+                '''
+                to_tiff(torch.sqrt(fixed_y[..., 0] ** 2 + fixed_y[..., 1] ** 2), path=mri_qc + 'fixed_y.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(fixed_mask[..., 0] ** 2 + fixed_mask[..., 1] ** 2), path=mri_qc + 'fixed_mask.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(fixed_y_tran[..., 0] ** 2 + fixed_y_tran[..., 1] ** 2), path=mri_qc + 'fixed_y_tran.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(moved_y[..., 0] ** 2 + moved_y[..., 1] ** 2), path=mri_qc + 'moved_y.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(moved_mask[..., 0] ** 2 + moved_mask[..., 1] ** 2), path=mri_qc + 'moved_mask.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(moved_y_tran[..., 0] ** 2 + moved_y_tran[..., 1] ** 2), path=mri_qc + 'moved_y_tran.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(moved_y_warped_truth[..., 0] ** 2 + moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_warped_truth.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(moved_y_tran_warped_truth[..., 0] ** 2 + moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_tran_warped_truth.tiff', is_normalized=False)
 
-                else:
-                    to_tiff(torch.sqrt(fixed_y[..., 0] ** 2 + fixed_y[..., 1] ** 2), path=mri_qc + 'fixed_y.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(fixed_mask[..., 0] ** 2 + fixed_mask[..., 1] ** 2), path=mri_qc + 'fixed_mask.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(fixed_y_tran[..., 0] ** 2 + fixed_y_tran[..., 1] ** 2), path=mri_qc + 'fixed_y_tran.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(moved_y[..., 0] ** 2 + moved_y[..., 1] ** 2), path=mri_qc + 'moved_y.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(moved_mask[..., 0] ** 2 + moved_mask[..., 1] ** 2), path=mri_qc + 'moved_mask.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(moved_y_tran[..., 0] ** 2 + moved_y_tran[..., 1] ** 2), path=mri_qc + 'moved_y_tran.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(moved_y_warped_truth[..., 0] ** 2 + moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_warped_truth.tiff', is_normalized=False)
-                    to_tiff(torch.sqrt(moved_y_tran_warped_truth[..., 0] ** 2 + moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'moved_y_tran_warped_truth.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_fixed_y[..., 0] ** 2 + mul_fixed_y[..., 1] ** 2), path=mri_qc + 'mul_fixed_y.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_fixed_mask[..., 0] ** 2 + mul_fixed_mask[..., 1] ** 2), path=mri_qc + 'mul_fixed_mask.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_fixed_y_tran[..., 0] ** 2 + mul_fixed_y_tran[..., 1] ** 2), path=mri_qc + 'mul_fixed_y_tran.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_moved_y[..., 0] ** 2 + mul_moved_y[..., 1] ** 2), path=mri_qc + 'mul_moved_y.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_moved_mask[..., 0] ** 2 + mul_moved_mask[..., 1] ** 2), path=mri_qc + 'mul_moved_mask.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_moved_y_tran[..., 0] ** 2 + mul_moved_y_tran[..., 1] ** 2), path=mri_qc + 'mul_moved_y_tran.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_moved_y_warped_truth[..., 0] ** 2 + mul_moved_y_warped_truth[..., 1] ** 2), path=mri_qc + 'mul_moved_y_warped_truth.tiff', is_normalized=False)
+                to_tiff(torch.sqrt(mul_moved_y_tran_warped_truth[..., 0] ** 2 + mul_moved_y_tran_warped_truth[..., 1] ** 2), path=mri_qc + 'mul_moved_y_tran_warped_truth.tiff', is_normalized=False)
 
     else:
         print("Found MRI H5 File.")
@@ -381,16 +428,25 @@ def load_synthetic_MoDL_dataset(
         'sensitivity_map': source_h5['s'][:],
         'moved_x': alignment_h5['moved_x'][:],
 
-        'moved_y': mri_h5['moved_y'][:],
-        'moved_mask': mri_h5['moved_mask'][:],
-        'moved_y_tran': np.transpose(mri_h5['moved_y_tran'][:], [0, 3, 1, 2]),
-
         'fixed_y': mri_h5['fixed_y'][:],
         'fixed_mask': mri_h5['fixed_mask'][:],
         'fixed_y_tran': np.transpose(mri_h5['fixed_y_tran'][:], [0, 3, 1, 2]),
 
+        'moved_y': mri_h5['moved_y'][:],
+        'moved_mask': mri_h5['moved_mask'][:],
+        'moved_y_tran': np.transpose(mri_h5['moved_y_tran'][:], [0, 3, 1, 2]),
         'moved_y_warped_truth': mri_h5['moved_y_warped_truth'][:],
-        'moved_y_tran_warped_truth': np.transpose(mri_h5['moved_y_tran_warped_truth'][:], [0, 3, 1, 2])
+        'moved_y_tran_warped_truth': np.transpose(mri_h5['moved_y_tran_warped_truth'][:], [0, 3, 1, 2]),
+
+        'mul_fixed_y': mri_h5['mul_fixed_y'][:],
+        'mul_fixed_mask': mri_h5['mul_fixed_mask'][:],
+        'mul_fixed_y_tran': np.transpose(mri_h5['mul_fixed_y_tran'][:], [0, 3, 1, 2]),
+
+        'mul_moved_y': mri_h5['mul_moved_y'][:],
+        'mul_moved_mask': mri_h5['mul_moved_mask'][:],
+        'mul_moved_y_tran': np.transpose(mri_h5['mul_moved_y_tran'][:], [0, 3, 1, 2]),
+        'mul_moved_y_warped_truth': mri_h5['mul_moved_y_warped_truth'][:],
+        'mul_moved_y_tran_warped_truth': np.transpose(mri_h5['mul_moved_y_tran_warped_truth'][:], [0, 3, 1, 2])
     }
 
 
