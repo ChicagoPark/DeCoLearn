@@ -71,7 +71,8 @@ def to_tiff(x, path, is_normalized=True):
     else:
         n_slice, n_x, n_y, n_c = x.shape
 
-        x = post_processing(np.expand_dims(x, -1))
+        #x = post_processing(np.expand_dims(x, -1))
+        x = np.expand_dims(x, -1)
         x = np.squeeze(x)
 
         if is_normalized:
