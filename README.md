@@ -9,9 +9,52 @@ Deep neural networks for medical image reconstruction are traditionally trained 
 
 ## Code
 
-### Download datasets
+### Download Datasets
 
 - Download the brain mri dataset [here](https://drive.google.com/file/d/1qp-l9kJbRfQU1W5wCjOQZi7I3T6jwA37/view) and put it into the `decolearn/dataset` folder.
+
+### Detail Information about Dataset
+
+- Used dataset is the parallel imaging dataset given and used by MoDL: Model Based Deep Learning Architecture for Inverse Problems.
+
+- This dataset consist of parallel magnetic resonance imaging (MRI) brain data of five human subjects. Four of which are used during training of the model and fifth subject is used during testing. Above link contain fully sampled preprocessed data in numpy format for both training and testing. We also provide coil-sensitity-maps (CSM) pre-computed using E-SPIRIT algorithm. Total file size is 3 GB and contains following arrays:
+
+Data  	      |      Explanation
+:---------------: | :-------------:
+`trnOrg`  | This is complex arrary of 256x232x360 containing 90 slices from each of the 4 training subjects. Each slice is of spatial dimension 256x232. This is the original fully sampled data.
+`trnCSM`  | This is a complex array of 256x232x12x360 representing coil sensitity maps (csm). Here 12 represent number of coils.
+`trnMask`  | This is the random undersampling mask to do 6-fold acceleration. We use different mask for different slices.
+`tstOrg`  | Similar arrays for testing purpose. (164 testing images)
+`tstCSM`  | Similar arrays for testing purpose. (164 testing images)
+`tstMask`  | Similar arrays for testing purpose. (164 testing images)
+
+----
+```diff
++ Code, in this repository, provides the program to process the dataset.hdf5 to generate datasets for single-coil and multi-coil datasets. In addition, non-linearly deformed datasets are also created.
+
+- Original Dataset Explanation: https://github.com/hkaggarwal/modl
+```
+----
+
+### Additionally Created Dataset 1: `alignment H5 file`
+Data  	      |      Explanation
+:---------------: | :-------------:
+`moved_x`  | non-linearly deformed ground truth
+
+### Additionally Created Dataset 2: `MRI H5 file`
+Data  	      |      Explanation
+:---------------: | :-------------:
+`fixed_y`  | undersampled measurement of fixed data(`[256, 232, 2]`)
+`fixed_mask`  | fixed undersampling mask (`[256, 232, 2]`)
+`fixed_y_tran`  | fixed input MRI image (`[1, 2, 256, 232]`)
+`moved_y`  | undersampled measurement of moved data(`[256, 232, 2]`)
+`moved_mask`  | moved undersampling mask (`[256, 232, 2]`)
+`moved_y_tran`  | moved input MRI image (`[1, 2, 256, 232]`)
+`mul_fixed_y`  | undersampled measurement of multi-coil fixed data(`[12, 256, 232, 2]`)
+`mul_moved_y`  | undersampled measurement of multi-coil moved data(`[12, 256, 232, 2]`)
+`mul_fixed_y_tran`  | multi-coil fixed input MRI image (`[1, 2, 256, 232]`)
+`mul_moved_y_tran`  | multi-coil moved input MRI image (`[1, 2, 256, 232]`)
+
 
 
 ### Setup Environment
